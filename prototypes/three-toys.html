@@ -127,9 +127,9 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     <div class="bar" role="progressbar" aria-label="Round progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar"><i id="bar-fill"></i></div>
   </div>
   <div class="envs" role="radiogroup" aria-label="Environment">
-    <button class="env" role="radio" data-env="studio" aria-checked="true"><i style="background: linear-gradient(135deg, #F6DCCD, #D9D3F1)"></i>Studio</button>
-    <button class="env" role="radio" data-env="desk" aria-checked="false"><i style="background: linear-gradient(135deg, #C88F5A 50%, #78B4EA 50%)"></i>Desk</button>
-    <button class="env" role="radio" data-env="bath" aria-checked="false"><i style="background: linear-gradient(135deg, #FFD23F 0 35%, #BCE7DC 35%)"></i>Bath</button>
+    <button class="env" role="radio" data-env="sweep" aria-checked="true"><i style="background: linear-gradient(135deg, #FFE6A0 33%, #CDE5FF 33% 66%, #FFD2C2 66%)"></i>Sweep</button>
+    <button class="env" role="radio" data-env="podium" aria-checked="false"><i style="background: radial-gradient(circle at 50% 62%, #FFFFFF 0 42%, #FFC6B3 43% 58%, #FFEDE3 59%)"></i>Podium</button>
+    <button class="env" role="radio" data-env="flatlay" aria-checked="false"><i style="background: repeating-linear-gradient(0deg, #F2FFFB 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, #F2FFFB 0 1px, #86D4C4 1px 4px)"></i>Flat lay</button>
   </div>
   <div class="row">
     <button class="btn" id="reset">Reset</button>
@@ -465,11 +465,11 @@ const FoamDomain = {
 };
 
 /* ───────────── presentation: shared resources ───────────── */
-// Matcaps carry the lighting. Each environment repaints them, so every toy picks up that room's light.
+// Matcaps carry the lighting. Each environment repaints them, so every toy picks up that set's light.
 const LIGHTS = {
-  studio: { key: '#FFFFFF', fill: '#8F8BA8', spec: '#FFFFFF', rim: ['#FFC2DA', 0.22] },
-  desk: { key: '#FFF6E6', fill: '#8D9BC4', spec: '#FFFCF2', rim: ['#FFE1A3', 0.2] },
-  bath: { key: '#FFFFFF', fill: '#93A9C2', spec: '#FFFFFF', rim: ['#B8F2E4', 0.28] },
+  sweep: { key: '#FFFFFF', fill: '#9298B0', spec: '#FFFFFF', rim: ['#FFFFFF', 0.25] },
+  podium: { key: '#FFFBF6', fill: '#A497B4', spec: '#FFFFFF', rim: ['#FFD9C9', 0.3] },
+  flatlay: { key: '#FFFFFF', fill: '#8EA4A8', spec: '#FFFFFF', rim: ['#D9FFF6', 0.2] },
 };
 const MATCAP_SPECS = {
   plastic: { shade: 1, rim: 0.28, spec: 0.9, size: 0.17 },
@@ -521,7 +521,7 @@ for (const k in MATCAP_SPECS) {
   const c = document.createElement('canvas'); c.width = c.height = 256;
   MATCAP[k] = new THREE.CanvasTexture(c); MATCAP[k].colorSpace = THREE.SRGBColorSpace;
 }
-paintMatcaps(LIGHTS.studio);
+paintMatcaps(LIGHTS.sweep);
 const SHARED = {
   dome: new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2),
   rim: new THREE.TorusGeometry(1, 0.13, 8, 32).rotateX(Math.PI / 2),
@@ -823,88 +823,45 @@ class FoamView extends BaseView {
   }
 }
 
-/* ───────────── environments (built on first use, no downloaded assets) ───────────── */
+/* ───────────── environments: a bright photo set around the toy, never a room ───────────── */
 const ROOM_VS = `varying vec3 vW;
 void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
-const ROOM_FS = `uniform vec3 uFloor, uWall, uTop, uPool, uSun;
-uniform float uBlend, uRise, uPoolR, uPoolK, uWoodK, uSunK, uVig, uZc, uTileK, uMarbleK;
-uniform vec3 uGrout;
-uniform vec2 uRot, uSunC;
-uniform sampler2D uWood;
+const ROOM_FS = `uniform vec3 uFloor, uWall, uTop, uGlow, uMat, uGrid;
+uniform float uBlend, uRise, uGlowK, uY0, uMatK;
+uniform vec2 uRot, uMatHalf;
 varying vec3 vW;
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float gridLine(vec2 q, float step, float w) { vec2 g = abs(fract(q / step + 0.5) - 0.5) * step; return 1.0 - smoothstep(w, w * 2.2, min(g.x, g.y)); }
 void main() {
-  vec3 L = vec3(vW.x * uRot.x - vW.z * uRot.y, vW.y, vW.x * uRot.y + vW.z * uRot.x);
+  vec3 L = vec3(vW.x * uRot.x - vW.z * uRot.y, vW.y - uY0, vW.x * uRot.y + vW.z * uRot.x);
   float onFloor = 1.0 - smoothstep(0.0, uBlend, L.y);
-  vec3 wall = mix(uWall, uTop, smoothstep(0.0, 1.0, clamp(L.y / uRise, 0.0, 1.0)));
-  if (uTileK > 0.0) {
-    vec2 t = vec2(L.x / 0.9, (L.y - 0.03) / 0.45);
-    t.x += 0.5 * mod(floor(t.y), 2.0);
-    vec2 f = fract(t) - 0.5;
-    float d = min((0.5 - abs(f.x)) * 0.9, (0.5 - abs(f.y)) * 0.45);
-    wall *= 1.0 + 0.07 * f.y - 0.05 * smoothstep(0.02, 0.1, d) * (1.0 - smoothstep(0.1, 0.2, d));
-    wall = mix(wall, uGrout, (1.0 - smoothstep(0.012, 0.03, d)) * uTileK);
+  vec3 c = mix(mix(uWall, uTop, smoothstep(0.0, 1.0, clamp(L.y / uRise, 0.0, 1.0))), uFloor, onFloor);
+  // soft key-light glow, upper left, so the set never reads as a flat colour card
+  c += uGlow * uGlowK * exp(-dot(L.xz - vec2(-6.0, -10.0), L.xz - vec2(-6.0, -10.0)) / 260.0);
+  if (uMatK > 0.0) {
+    vec2 q = L.xz, a = abs(q) - uMatHalf + 0.6;
+    float sd = length(max(a, 0.0)) + min(max(a.x, a.y), 0.0) - 0.6;
+    vec3 mat = uMat;
+    float lines = max(gridLine(q, 1.0, 0.012) * 0.45, gridLine(q, 5.0, 0.022) * 0.85);
+    vec2 r = vec2(q.x - q.y, q.x + q.y) * 0.70711;
+    lines = max(lines, gridLine(r, 7.0711, 0.012) * 0.28);
+    float tick = step(abs(sd + 0.32), 0.18) * gridLine(q, 0.5, 0.01);
+    float border = 1.0 - smoothstep(0.015, 0.04, abs(sd + 0.55));
+    mat = mix(mat, uGrid, max(max(lines, tick * 0.9), border * 0.8));
+    c *= mix(0.86, 1.0, smoothstep(0.0, 0.5, sd));
+    c = mix(c, mat, (1.0 - smoothstep(-0.015, 0.015, sd)) * onFloor);
   }
-  vec3 floorC = uFloor;
-  if (uWoodK > 0.0) floorC *= mix(1.0, 0.5 + texture2D(uWood, L.xz * vec2(0.035, 0.12)).r, uWoodK);
-  if (uMarbleK > 0.0) {
-    float v1 = sin(L.x * 0.7 + sin(L.z * 1.1 + L.x * 0.3) * 2.2 + sin(L.z * 0.37) * 3.0);
-    float v2 = sin(L.x * 1.9 - L.z * 1.3 + sin(L.x * 0.8) * 1.5);
-    float vein = max(1.0 - smoothstep(0.0, 0.07, abs(v1)), 0.5 * (1.0 - smoothstep(0.0, 0.04, abs(v2))));
-    floorC = mix(floorC, floorC * vec3(0.76, 0.79, 0.84), vein * uMarbleK * 0.55);
-  }
-  vec3 c = mix(wall, floorC, onFloor);
-  c += uPool * uPoolK * exp(-dot(vW.xz, vW.xz) / (uPoolR * uPoolR)) * mix(0.3, 1.0, onFloor);
-  if (uSunK > 0.0) {
-    vec2 q = L.xz - uSunC; q.x += q.y * 0.55;
-    vec2 a = abs(q) - vec2(2.6, 1.7);
-    float m = 1.0 - smoothstep(-0.25, 0.25, max(a.x, a.y));
-    m *= smoothstep(0.05, 0.14, abs(q.x)) * smoothstep(0.05, 0.14, abs(q.y));
-    c += uSun * uSunK * m * onFloor;
-  }
-  c *= 1.0 - uVig * smoothstep(5.0, 26.0, length(vec2(L.x * 0.7, L.z - uZc * 0.3)));
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
   gl_FragColor.rgb += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
 }`;
-const GLASS_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
-const GLASS_FS = `uniform vec3 uTop, uBot, uGlow; uniform float uClouds, uTime; varying vec2 vUv;
-float h1(float n) { return fract(sin(n) * 43758.5453); }
-void main() {
-  vec3 c = mix(uBot, uTop, vUv.y);
-  c += uGlow * exp(-dot(vUv - vec2(0.18, 0.86), vUv - vec2(0.18, 0.86)) * 8.0);
-  for (int i = 0; i < 3; i++) {
-    float fi = float(i);
-    vec2 p = vec2(0.28 + fi * 0.3 + 0.04 * sin(uTime * 0.07 + fi), 0.5 + 0.18 * h1(fi + 3.0));
-    c = mix(c, vec3(1.0), uClouds * smoothstep(0.17, 0.0, length((vUv - p) * vec2(1.0, 2.8))));
-  }
-  gl_FragColor = vec4(c, 1.0);
-  #include <colorspace_fragment>
-}`;
-function woodTexture() {
-  const W = 512, H = 256, c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d'), rnd = mulberry32(11), planks = 4, ph = H / planks;
-  for (let p = 0; p < planks; p++) {
-    const tone = Math.round(118 + rnd() * 26); g.fillStyle = `rgb(${tone},${tone},${tone})`; g.fillRect(0, p * ph, W, ph);
-    for (let k = 0; k < 46; k++) {
-      const y0 = p * ph + rnd() * ph, f1 = 0.004 + rnd() * 0.01, f2 = 0.02 + rnd() * 0.03, a1 = 2 + rnd() * 6, ph0 = rnd() * 6;
-      g.strokeStyle = rnd() < 0.6 ? `rgba(40,40,40,${0.05 + rnd() * 0.12})` : `rgba(230,230,230,${0.04 + rnd() * 0.08})`;
-      g.lineWidth = 0.6 + rnd() * 1.8; g.beginPath();
-      for (let x = 0; x <= W; x += 8) { const y = y0 + Math.sin(x * f1 + ph0) * a1 + Math.sin(x * f2) * 1.2; x ? g.lineTo(x, y) : g.moveTo(x, y); }
-      g.stroke();
-    }
-    g.fillStyle = 'rgba(0,0,0,0.45)'; g.fillRect(0, p * ph, W, 1.5);
-    g.fillRect(Math.floor(rnd() * W), p * ph, 1.5, ph);
-  }
-  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t;
-}
-// One mesh holds floor and back wall: the floor bends up into the wall with corner radius Rc.
+// One mesh holds floor and backdrop: the floor sweeps up into the wall with radius Rc, like a photo-studio paper roll.
 function coveGeometry(Rc) {
-  const g = new THREE.PlaneGeometry(150, 90, 1, 180); g.rotateX(-Math.PI / 2);
+  const g = new THREE.PlaneGeometry(160, 160, 1, 320); g.rotateX(-Math.PI / 2);
   const p = g.attributes.position, arc = Math.PI * Rc / 2;
   for (let i = 0; i < p.count; i++) {
-    const zz = p.getZ(i) - 5;
-    if (zz >= 0) continue;
+    const zz = p.getZ(i) - 20;
+    if (zz >= 0) { p.setZ(i, zz); continue; }
     const s = -zz;
     if (s < arc) { const a = s / Rc; p.setZ(i, -Rc * Math.sin(a)); p.setY(i, Rc * (1 - Math.cos(a))); }
     else { p.setZ(i, -Rc); p.setY(i, Rc + s - arc); }
@@ -916,150 +873,93 @@ function makeRoom(o) {
   return new THREE.Mesh(coveGeometry(o.Rc), new THREE.ShaderMaterial({
     vertexShader: ROOM_VS, fragmentShader: ROOM_FS,
     uniforms: {
-      uFloor: { value: C(o.floor) }, uWall: { value: C(o.wall) }, uTop: { value: C(o.top) }, uPool: { value: C(o.pool || '#ffffff') }, uSun: { value: C(o.sun || '#ffffff') },
-      uBlend: { value: o.blend }, uRise: { value: o.rise }, uPoolR: { value: o.poolR || 6 }, uPoolK: { value: o.poolK || 0 },
-      uWoodK: { value: o.wood ? 1 : 0 }, uWood: { value: o.wood || null }, uSunK: { value: o.sunK || 0 }, uSunC: { value: new THREE.Vector2() },
-      uVig: { value: o.vig || 0 }, uZc: { value: 0 }, uRot: { value: new THREE.Vector2(1, 0) },
-      uTileK: { value: o.tile ? 1 : 0 }, uGrout: { value: C(o.grout || '#ffffff') }, uMarbleK: { value: o.marble ? 1 : 0 },
+      uFloor: { value: C(o.floor) }, uWall: { value: C(o.wall) }, uTop: { value: C(o.top) }, uGlow: { value: C('#FFFFFF') }, uGlowK: { value: o.glow || 0 },
+      uBlend: { value: o.blend }, uRise: { value: o.rise }, uY0: { value: 0 }, uRot: { value: new THREE.Vector2(1, 0) },
+      uMatK: { value: o.mat ? 1 : 0 }, uMat: { value: C(o.mat || '#ffffff') }, uGrid: { value: C(o.grid || '#ffffff') }, uMatHalf: { value: new THREE.Vector2(5, 5) },
     },
   }));
 }
 const mm = (color, matcap = MATCAP.plastic, extra = {}) => new THREE.MeshMatcapMaterial({ matcap, color, ...extra });
-const placed = (mesh, x, y, z) => { mesh.position.set(x, y, z); return mesh; };
-const skyMat = (top, bot, glow, clouds) => new THREE.ShaderMaterial({
-  vertexShader: GLASS_VS, fragmentShader: GLASS_FS,
-  uniforms: { uTop: { value: C(top) }, uBot: { value: C(bot) }, uGlow: { value: C(glow) }, uClouds: { value: clouds }, uTime: { value: 0 } },
-});
-function windowGroup(frameColor) {
-  const grp = new THREE.Group(), W = 4.6, H = 3.0;
-  const glass = new THREE.Mesh(new THREE.PlaneGeometry(W, H), skyMat('#78B4EA', '#D6EDFA', '#FFF0C8', 0.6));
-  grp.add(glass);
-  const fm = mm(frameColor), t = 0.16;
-  for (const [w, h, x, y] of [[W + t * 2, t, 0, H / 2 + t / 2], [W + t * 2, t * 1.6, 0, -H / 2 - t * 0.8], [t, H, -W / 2 - t / 2, 0], [t, H, W / 2 + t / 2, 0], [t * 0.6, H, 0, 0], [W, t * 0.6, 0, 0.25]]) {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.14), fm); b.position.set(x, y, 0.05); grp.add(b);
-  }
-  grp.userData.glass = glass;
-  return grp;
+// A disc with rounded edges, built as a lathe so the rim catches the matcap highlight.
+function roundedDisc(R, H, r) {
+  const pts = [new THREE.Vector2(0, 0), new THREE.Vector2(R - r, 0)];
+  for (let i = 1; i <= 6; i++) { const a = -Math.PI / 2 + i / 6 * Math.PI / 2; pts.push(new THREE.Vector2(R - r + Math.cos(a) * r, r + Math.sin(a) * r)); }
+  for (let i = 1; i <= 6; i++) { const a = i / 6 * Math.PI / 2; pts.push(new THREE.Vector2(R - r + Math.cos(a) * r, H - r + Math.sin(a) * r)); }
+  pts.push(new THREE.Vector2(0, H));
+  return new THREE.LatheGeometry(pts, 96);
+}
+function archShape(w, h, t) {
+  const s = new THREE.Shape(), r = w / 2;
+  s.moveTo(-r, 0); s.lineTo(-r, h - r); s.absarc(0, h - r, r, Math.PI, 0, true); s.lineTo(r, 0); s.lineTo(r - t, 0); s.lineTo(r - t, h - r);
+  s.absarc(0, h - r, r - t, 0, Math.PI, false); s.lineTo(-r + t, 0); s.closePath();
+  return s;
+}
+function setRoom(e, floor, wall, top) {
+  const u = e.room.material.uniforms; u.uFloor.value.set(floor); u.uWall.value.set(wall); u.uTop.value.set(top); ENV_BG.set(top);
 }
 
-function buildStudio(e) {
-  e.bg = '#E1DCF6'; e.gap = 1.0;
-  e.room = makeRoom({ Rc: 5, blend: 3.5, rise: 14, floor: '#FAE3D6', wall: '#F6DAE5', top: '#E1DCF6', pool: '#FFFFFF', poolR: 7, poolK: 0.12, vig: 0.1 });
-  const defs = [
-    [new THREE.TorusGeometry(0.55, 0.22, 20, 48), '#FF8FB1', (w, d) => [-w * 0.72, 1.5, -d - 1.3]],
-    [new THREE.SphereGeometry(0.6, 32, 20), '#FFD166', (w, d) => [w * 0.78, 1.2, -d - 1.1]],
-    [new THREE.CapsuleGeometry(0.3, 0.8, 8, 20), '#7ED9B4', (w, d) => [w * 0.22, 1.9, -d - 2.4]],
-    [new THREE.ConeGeometry(0.5, 0.95, 32), '#B9A3FF', (w, d) => [-w * 0.2, 1.4, -d - 1.6]],
-    [new THREE.IcosahedronGeometry(0.55, 0), '#6CC4FF', (w, d) => [w + 1.1, 1.1, -d + 0.4]],
-    [new THREE.SphereGeometry(0.4, 28, 18), '#FFAA80', (w, d) => [-w - 1.0, 0.9, -d + 0.8]],
-  ];
-  e.shapes = defs.map(([geo, color, at], i) => {
-    const mesh = new THREE.Mesh(geo, mm(color, MATCAP.plastic, { flatShading: i === 4 }));
-    mesh.rotation.set(i * 0.7, i * 1.3, 0.4);
-    const sh = new THREE.Mesh(SHARED.plane, SHARED.shadow);
-    e.group.add(mesh, sh);
-    return { mesh, sh, at, base: [0, 0, 0] };
-  });
-  e.place = (w, d) => { for (const s of e.shapes) s.base = s.at(w, d); };
-  e.update = (dt, t) => {
-    const still = reduceMotion.matches;
-    e.shapes.forEach((s, i) => {
-      const bob = still ? 0 : Math.sin(t * 0.8 + i * 1.7) * 0.22;
-      s.mesh.position.set(s.base[0], s.base[1] + bob, s.base[2]);
-      if (!still) { s.mesh.rotation.y += dt * 0.3; s.mesh.rotation.x += dt * 0.12; }
-      const k = 1.3 + (s.base[1] + bob) * 0.3;
-      s.sh.position.set(s.base[0], 0.004, s.base[2]); s.sh.scale.set(k, 1, k);
-    });
+// 1 · Sweep: one seamless paper sweep, tinted per toy to set off its colours. Nothing else in frame.
+const SWEEP = { pop: ['#FFE6A0', '#FFEFC4', '#FFF8E6'], sand: ['#CDE5FF', '#DDEDFF', '#F1F7FF'], foam: ['#FFD2C2', '#FFE0D5', '#FFF3EE'] };
+function buildSweep(e) {
+  e.gap = 2.2;
+  e.room = makeRoom({ Rc: 7, blend: 5, rise: 16, floor: '#FFE6A0', wall: '#FFEFC4', top: '#FFF8E6', glow: 0.35 });
+  e.place = (w, d, zc, toy) => setRoom(e, ...SWEEP[toy]);
+}
+
+// 2 · Podium: the toy displayed on a two-tier plinth shaped to its footprint, with a few large soft forms behind.
+function buildPodium(e) {
+  const Y0 = -1.3;
+  e.tilt = [46, 58]; e.floorY = Y0; e.pad = 1.0; e.gap = 6;
+  e.room = makeRoom({ Rc: 6, blend: 4, rise: 16, floor: '#FFEDE3', wall: '#FFF2EA', top: '#FFF9F5', glow: 0.3 });
+  e.room.position.y = Y0; e.room.material.uniforms.uY0.value = Y0;
+  setRoom(e, '#FFEDE3', '#FFF2EA', '#FFF9F5');
+  const topMat = mm('#FFFAF6'), baseMat = mm('#FFC6B3');
+  const arch = new THREE.Mesh(new THREE.ExtrudeGeometry(archShape(3.4, 3.9, 0.7), { depth: 0.6, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 3, curveSegments: 40 }), mm('#9FDCC2'));
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(1.0, 40, 28), mm('#FFD86B'));
+  const pill = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.8, 10, 28), mm('#C9B6FF'));
+  const ballShadow = new THREE.Mesh(SHARED.plane, SHARED.shadow), pillShadow = new THREE.Mesh(SHARED.plane, SHARED.shadow);
+  e.group.add(arch, ball, pill, ballShadow, pillShadow);
+  let tiers = null;
+  e.place = (w, d) => {
+    const key = `${w.toFixed(2)}:${d.toFixed(2)}`;
+    if (!tiers || tiers.key !== key) {
+      if (tiers) { tiers.top.geometry.dispose(); tiers.base.geometry.dispose(); e.group.remove(tiers.top, tiers.base); }
+      tiers = {
+        key,
+        top: new THREE.Mesh(slab(roundRectShape(2 * w + 0.9, 2 * d + 0.9, 0.9), 0.43, 0.06), topMat),
+        base: new THREE.Mesh(slab(roundRectShape(2 * w + 2.1, 2 * d + 2.1, 1.3), 0.6, 0.07), baseMat),
+      };
+      tiers.top.position.y = -0.55; tiers.base.position.y = Y0;
+      e.group.add(tiers.top, tiers.base);
+    }
+    const back = -(d + 2.2);
+    arch.position.set(-w * 0.55, Y0, back - 1.6);
+    ball.position.set(w * 0.55, Y0 + 1.0, back - 0.6);
+    pill.position.set(w * 0.95, Y0 + 1.4, back - 2.0); pill.rotation.z = -0.3;
+    ballShadow.position.set(ball.position.x, Y0 + 0.004, ball.position.z); ballShadow.scale.set(3, 1, 3);
+    pillShadow.position.set(pill.position.x, Y0 + 0.004, pill.position.z); pillShadow.scale.set(2.8, 1, 2);
   };
 }
 
-function buildDesk(e) {
-  e.bg = '#F2E9DC'; e.gap = 1.6;
-  e.room = makeRoom({ Rc: 0.12, blend: 0.04, rise: 9, floor: '#DDAA74', wall: '#F7F0E6', top: '#F2E9DC', wood: woodTexture(), sun: '#FFE09C', sunK: 0.36, pool: '#FFF6E4', poolR: 8, poolK: 0.08, vig: 0.14 });
-  e.win = windowGroup('#FFFFFF');
-  const cup = new THREE.Group();
-  cup.add(placed(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.44, 1.15, 28), mm('#5BA8E8')), 0, 0.575, 0));
-  ['#FFCB47', '#FF6B6B', '#5BC88D', '#9C8CFF', '#FF9F5A'].forEach((col, i) => {
-    const pencil = new THREE.Group(), body = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.9, 6), mm(col));
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.22, 6), mm('#E9C9A0'));
-    tip.position.y = 1.06; pencil.add(body, tip);
-    const a = i / 5 * Math.PI * 2;
-    pencil.position.set(Math.cos(a) * 0.2, 1.25, Math.sin(a) * 0.2);
-    pencil.rotation.set(Math.sin(a) * 0.22, 0, -Math.cos(a) * 0.22);
-    cup.add(pencil);
-  });
-  const plant = new THREE.Group();
-  plant.add(placed(new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.48, 0.95, 28), mm('#F4F0E8')), 0, 0.475, 0));
-  const leafMat = mm('#5DBB63'), leafGeo = new THREE.SphereGeometry(1, 16, 12);
-  for (let i = 0; i < 7; i++) {
-    const leaf = new THREE.Mesh(leafGeo, leafMat), a = i / 7 * Math.PI * 2;
-    leaf.scale.set(0.24, 0.75, 0.1);
-    leaf.position.set(Math.cos(a) * 0.3, 1.55, Math.sin(a) * 0.3);
-    leaf.rotation.set(Math.sin(a) * 0.55, -a, -Math.cos(a) * 0.55);
-    plant.add(leaf);
-  }
-  const books = new THREE.Group();
-  [[2.0, 0.28, 1.3, '#3D6FB6', 0], [1.8, 0.24, 1.2, '#E25D5D', 0.12], [1.9, 0.2, 1.25, '#F2C14E', -0.08]].reduce((y, [w, h, d, col, r]) => {
-    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mm(col)); b.position.y = y + h / 2; b.rotation.y = r; books.add(b); return y + h;
-  }, 0);
-  e.group.add(e.win, cup, plant, books);
-  e.place = (w, d, zc) => {
-    e.win.position.set(w * 0.2, 2.3, zc - 0.12 + 0.03);
-    cup.position.set(w + 1.3, 0, -d + 0.2);
-    plant.position.set(-w - 1.4, 0, -d - 0.3);
-    books.position.set(-w * 0.35, 0, -d - 0.8);
-    e.room.material.uniforms.uSunC.value.set(w * 0.35, d * 0.15);
-  };
-  e.update = (dt, t) => { e.win.userData.glass.material.uniforms.uTime.value = t; };
+// 3 · Flat lay: shot from almost overhead on a craft cutting mat, the classic hands-on ASMR video set.
+function buildFlatlay(e) {
+  e.gap = 14; e.tilt = [70, 78];
+  e.room = makeRoom({ Rc: 1, blend: 0.1, rise: 10, floor: '#FBFAF7', wall: '#FBFAF7', top: '#FBFAF7', glow: 0.12, mat: '#86D4C4', grid: '#F2FFFB' });
+  setRoom(e, '#FBFAF7', '#FBFAF7', '#FBFAF7');
+  e.place = (w, d) => e.room.material.uniforms.uMatHalf.value.set(Math.ceil(w + 1.3), Math.ceil(d + 1.3));
 }
 
-function buildBath(e) {
-  e.bg = '#D6F1EA'; e.gap = 1.5;
-  e.room = makeRoom({ Rc: 0.12, blend: 0.04, rise: 9, floor: '#F8F8F6', wall: '#BCE7DC', top: '#D6F1EA', tile: true, grout: '#F3FBF8', marble: true, pool: '#FFFFFF', poolR: 8, poolK: 0.06, vig: 0.1 });
-  const gold = mm('#E8C062', MATCAP.metal), white = mm('#FFFFFF');
-  const mirror = new THREE.Group();
-  mirror.add(new THREE.Mesh(new THREE.CircleGeometry(1.5, 64), skyMat('#BFE3F2', '#F4FBFD', '#FFFFFF', 0.35)), placed(new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.09, 12, 64), gold), 0, 0, 0.02));
-  const duck = new THREE.Group(), yellow = mm('#FFD23F'), sphere = new THREE.SphereGeometry(1, 28, 18);
-  const body = placed(new THREE.Mesh(sphere, yellow), 0, 0.5, 0); body.scale.set(0.78, 0.52, 0.6);
-  const tail = placed(new THREE.Mesh(sphere, yellow), -0.62, 0.72, 0); tail.scale.set(0.22, 0.3, 0.22); tail.rotation.z = 0.6;
-  const head = placed(new THREE.Mesh(sphere, yellow), 0.42, 1.08, 0); head.scale.setScalar(0.38);
-  const beak = placed(new THREE.Mesh(sphere, mm('#FF8A3D')), 0.8, 1.0, 0); beak.scale.set(0.24, 0.08, 0.17);
-  const eyeMat = mm('#1C2133'), eyeGeo = new THREE.SphereGeometry(0.05, 10, 8);
-  duck.add(body, tail, head, beak, placed(new THREE.Mesh(eyeGeo, eyeMat), 0.67, 1.17, 0.18), placed(new THREE.Mesh(eyeGeo, eyeMat), 0.67, 1.17, -0.18));
-  duck.rotation.y = -0.9;
-  const pump = new THREE.Group();
-  pump.add(
-    placed(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.3, 28), mm('#FF9EB5')), 0, 0.65, 0),
-    placed(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.2, 20), white), 0, 1.4, 0),
-    placed(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 12), white), 0, 1.65, 0),
-    placed(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.09, 0.12), white), 0.17, 1.86, 0));
-  const towels = new THREE.Group(), roll = new THREE.CylinderGeometry(0.34, 0.34, 1.5, 28).rotateZ(Math.PI / 2);
-  [['#7ED9C9', 0, 0.34, -0.36], ['#FFFFFF', 0, 0.34, 0.36], ['#FFB4A2', 0, 0.94, 0]].forEach(([col, x, y, z]) => towels.add(placed(new THREE.Mesh(roll, mm(col, MATCAP.matte)), x, y, z)));
-  const soap = new THREE.Group();
-  soap.add(placed(new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.5, 0.1, 32), white), 0, 0.05, 0));
-  const bar = placed(new THREE.Mesh(sphere, mm('#C9B8FF')), 0, 0.22, 0); bar.scale.set(0.42, 0.14, 0.28); soap.add(bar);
-  e.group.add(mirror, duck, pump, towels, soap);
-  e.place = (w, d, zc) => {
-    mirror.position.set(-w * 0.15, 2.4, zc - 0.12 + 0.04);
-    duck.position.set(w + 1.1, 0, -d + 0.5);
-    pump.position.set(-w - 1.1, 0, -d - 0.1);
-    towels.position.set(-w * 0.55, 0, -d - 0.8);
-    soap.position.set(w * 0.45, 0, -d - 0.75);
-  };
-  e.update = (dt, t) => { if (!reduceMotion.matches) duck.rotation.z = Math.sin(t * 1.3) * 0.035; };
-}
-
-const ENVS = { studio: buildStudio, desk: buildDesk, bath: buildBath };
+const ENVS = { sweep: buildSweep, podium: buildPodium, flatlay: buildFlatlay };
 function makeEnv(id) {
-  const e = { group: new THREE.Group(), place() {}, update() {} };
+  const e = { group: new THREE.Group(), place() {}, update() {}, gap: 2 };
   ENVS[id](e);
   e.group.add(e.room);
   e.fit = (b, yaw) => {
     e.group.rotation.y = yaw;
     const w = (yaw ? b.d : b.w) / 2, d = (yaw ? b.w : b.d) / 2, zc = -(d + e.gap);
     e.room.position.z = zc;
-    const u = e.room.material.uniforms; u.uRot.value.set(Math.cos(yaw), Math.sin(yaw)); u.uZc.value = zc;
-    e.place(w, d, zc);
+    e.room.material.uniforms.uRot.value.set(Math.cos(yaw), Math.sin(yaw));
+    e.place(w, d, zc, current);
   };
   return e;
 }
@@ -1167,7 +1067,7 @@ new MutationObserver(readTheme).observe(document.documentElement, { attributes: 
 
 const rounds = {};
 let current = 'pop', roundCounter = 0, activePointer = null, chipTimer = 0, brushEnergy = 0;
-let env = null, envId = 'studio', lastFit = null;
+let env = null, envId = 'sweep', lastFit = null;
 const envCache = {};
 
 function newRound(id, cfgIndex) {
@@ -1182,11 +1082,12 @@ function newRound(id, cfgIndex) {
 function fitCamera(b) {
   const aspect = camera.aspect, portrait = aspect < 0.9;
   const yaw = portrait && b.w > b.d * 1.15 ? Math.PI / 2 : 0;
-  const tilt = THREE.MathUtils.degToRad((b.tilt || [54, 64])[portrait ? 1 : 0]);
+  const tilt = THREE.MathUtils.degToRad(((env && env.tilt) || b.tilt || [54, 64])[portrait ? 1 : 0]);
   const dir = new THREE.Vector3(Math.sin(yaw) * Math.cos(tilt), Math.sin(tilt), Math.cos(yaw) * Math.cos(tilt));
   const target = new THREE.Vector3(0, b.h * 0.3, 0), v = new THREE.Vector3();
   const corners = [];
-  for (const x of [-b.w / 2, b.w / 2]) for (const z of [-b.d / 2, b.d / 2]) for (const y of [0, b.h]) corners.push([x, y, z]);
+  const pad = (env && env.pad) || 0, y0 = (env && env.floorY) || 0;
+  for (const x of [-b.w / 2 - pad, b.w / 2 + pad]) for (const z of [-b.d / 2 - pad, b.d / 2 + pad]) for (const y of [y0, b.h]) corners.push([x, y, z]);
   let lo = 2, hi = 150;
   for (let it = 0; it < 30; it++) {
     const mid = (lo + hi) / 2;
@@ -1207,9 +1108,7 @@ function selectEnv(id) {
   if (env) env.group.removeFromParent();
   env = envCache[id] || (envCache[id] = makeEnv(id));
   paintMatcaps(LIGHTS[id]);
-  ENV_BG.set(env.bg);
-  attachEnv();
-  if (lastFit) env.fit(lastFit.b, lastFit.yaw);
+  if (rounds[current]) showToy();
   for (const b of document.querySelectorAll('.env')) b.setAttribute('aria-checked', String(b.dataset.env === id));
   try { localStorage.setItem('toybox-env', id); } catch {}
 }
@@ -1341,9 +1240,9 @@ new ResizeObserver(() => {
 
 /* boot */
 for (const b of document.querySelectorAll('.env')) b.addEventListener('click', () => selectEnv(b.dataset.env));
-let savedEnv = 'studio';
-try { savedEnv = localStorage.getItem('toybox-env') || 'studio'; } catch {}
-selectEnv(ENVS[savedEnv] ? savedEnv : 'studio');
+let savedEnv = 'sweep';
+try { savedEnv = localStorage.getItem('toybox-env') || 'sweep'; } catch {}
+selectEnv(ENVS[savedEnv] ? savedEnv : 'sweep');
 const feasible = sandFeasibility();
 newRound('sand', 0); newRound('foam', 0);
 newRound('pop', 0);
