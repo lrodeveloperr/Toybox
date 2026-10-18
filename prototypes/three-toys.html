@@ -5,28 +5,16 @@
 :root {
   --bg: #E8ECF3;
   --surface: #FFFFFF;
-  --ink: #1C2133;
-  --muted: #586078;
+  --ink: #7A82D6;
+  --muted: #AAB2DE;
   --line: #D0D7E3;
   --accent: #E2426F;
   --accent-ink: #FFFFFF;
   --scene: #D9E1EC;
-  --bad: #C93A3A;
+  --bad: #FF6B6B;
   --font-display: "Fredoka", ui-rounded, "Segoe UI Rounded", "Segoe UI", system-ui, sans-serif;
   --font-body: "DM Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #10131B; --surface: #1A1E2A; --ink: #ECEFF7; --muted: #9AA2B8; --line: #2A3142;
-    --accent: #FF6F97; --accent-ink: #1B0A12; --scene: #1A2030; --bad: #FF7A7A;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #10131B; --surface: #1A1E2A; --ink: #ECEFF7; --muted: #9AA2B8; --line: #2A3142;
-  --accent: #FF6F97; --accent-ink: #1B0A12; --scene: #1A2030; --bad: #FF7A7A;
-  color-scheme: dark;
 }
 [hidden] { display: none !important; }
 html, body { height: 100%; }
@@ -60,7 +48,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; }
 .spinner { width: 44px; height: 44px; border-radius: 50%; border: 5px solid var(--line); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
 .result { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 30%, transparent); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 18px 28px 24px; box-shadow: 0 14px 40px rgba(10, 14, 30, .22); display: grid; gap: 12px; justify-items: center; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 18px 28px 24px; box-shadow: 0 14px 40px rgba(122, 130, 214, .28); display: grid; gap: 12px; justify-items: center; }
 .burst { width: 120px; height: 120px; }
 .burst .rays { transform-origin: 60px 60px; animation: spin 8s linear infinite; }
 .burst .core { transform-origin: 60px 60px; animation: pop .5s cubic-bezier(.34, 1.56, .64, 1) both; }
@@ -276,7 +264,7 @@ function simplify(pts, eps) {
   return [...rdp(0, half).slice(0, -1), ...rdp(half, pts.length - 1).slice(0, -1)];
 }
 
-const K = { Y: '#FFD23F', LY: '#FFE680', OR: '#FF8A3D', RD: '#FF4D5E', PK: '#FF5C8A', LP: '#FF8FC7', BL: '#4D96FF', SK: '#5AC8FA', GR: '#6BCB77', LG: '#9BE08F', PU: '#9B5DE5', TL: '#2EC4B6', BR: '#C68B59', CR: '#FFE3B3', DK: '#26294A', WH: '#FFFFFF', GL: '#BDE7FF', GD: '#FFC531' };
+const K = { Y: '#FFD23F', LY: '#FFE680', OR: '#FF8A3D', RD: '#FF4D5E', PK: '#FF5C8A', LP: '#FF8FC7', BL: '#4D96FF', SK: '#5AC8FA', GR: '#6BCB77', LG: '#9BE08F', PU: '#9B5DE5', TL: '#2EC4B6', BR: '#C68B59', CR: '#FFE3B3', DK: '#7A82D6', WH: '#FFFFFF', GL: '#BDE7FF', GD: '#FFC531' };
 // Forty hidden toys. Coordinates: x to the right, z towards the viewer (so "up" is negative z).
 const TOY_DEFS = {
   duck: () => [pe(-0.2, 0.5, 2.0, 1.25, 0, K.Y), pc(1.1, -1.0, 1.0, K.Y), pp([[-1.9, 0], [-2.9, -0.9], [-1.3, -0.4]], K.Y), pe(2.15, -0.85, 0.6, 0.26, 0.1, K.OR, 1), pe(-0.3, 0.55, 1.0, 0.55, 0.25, K.LY, 1), pc(1.35, -1.25, 0.16, K.DK, 2)],
@@ -289,12 +277,12 @@ const TOY_DEFS = {
   gem: () => [pp([[-2.6, -0.8], [-1.5, -2.0], [1.5, -2.0], [2.6, -0.8], [0, 2.6]], K.PU), pp([[-1.5, -0.8], [1.5, -0.8], [0, 2.2]], '#C5A8FF', 1), pp([[-1.4, -1.85], [1.4, -1.85], [1.0, -0.95], [-1.0, -0.95]], '#B794FF', 1)],
   dino: () => [pe(0, 0.4, 1.9, 1.1, 0, K.GR), pe(1.55, -1.05, 0.55, 1.25, -0.45, K.GR), pe(2.25, -2.05, 0.95, 0.55, 0, K.GR), pp([[-1.6, 0], [-3.4, 1.2], [-1.3, 1.1]], K.GR), pr(-0.8, 1.55, 0.65, 1.0, 0.25, 0, K.GR), pr(0.8, 1.55, 0.65, 1.0, 0.25, 0, K.GR), pp([[-1.0, -0.55], [-0.6, -1.2], [-0.2, -0.6]], K.Y, 1), pp([[0, -0.65], [0.4, -1.3], [0.8, -0.7]], K.Y, 1), pc(2.5, -2.15, 0.12, K.DK, 1)],
   robot: () => [pr(0, -1.5, 2.6, 1.7, 0.35, 0, K.TL), pr(0, 0.85, 3.0, 2.5, 0.4, 0, K.TL), pr(-2.0, 0.75, 0.65, 1.9, 0.3, 0, K.TL), pr(2.0, 0.75, 0.65, 1.9, 0.3, 0, K.TL), pr(0, -2.6, 0.2, 0.7, 0.05, 0, '#9AA3BE'), pc(0, -3.0, 0.3, K.RD, 1), pc(-0.6, -1.55, 0.34, K.WH, 1), pc(0.6, -1.55, 0.34, K.WH, 1), pc(-0.6, -1.55, 0.16, K.DK, 2), pc(0.6, -1.55, 0.16, K.DK, 2), pr(0, 0.8, 1.5, 0.9, 0.15, 0, K.Y, 1)],
-  house: () => [pr(0, 0.7, 3.8, 2.6, 0.12, 0, K.OR), pp([[-2.4, -0.5], [2.4, -0.5], [0, -2.6]], K.RD), pr(1.1, -1.7, 0.55, 1.0, 0.08, 0, K.RD), pr(0, 1.4, 0.9, 1.2, 0.3, 0, '#8B5A3C', 1), pr(-1.05, 0.35, 0.85, 0.85, 0.12, 0, K.GL, 1)],
+  house: () => [pr(0, 0.7, 3.8, 2.6, 0.12, 0, K.OR), pp([[-2.4, -0.5], [2.4, -0.5], [0, -2.6]], K.RD), pr(1.1, -1.7, 0.55, 1.0, 0.08, 0, K.RD), pr(0, 1.4, 0.9, 1.2, 0.3, 0, '#E0A877', 1), pr(-1.05, 0.35, 0.85, 0.85, 0.12, 0, K.GL, 1)],
   boat: () => [pp([[-2.8, 0.3], [2.8, 0.3], [1.9, 1.5], [-1.9, 1.5]], K.RD), pr(0, -1.1, 0.22, 2.9, 0.05, 0, K.BR), pp([[0.15, -2.5], [0.15, 0.1], [2.1, 0.1]], K.Y), pp([[-0.15, -2.2], [-0.15, 0.1], [-1.6, 0.1]], K.SK), pr(0, 0.9, 4.2, 0.25, 0.1, 0, K.WH, 1)],
   icecream: () => [pp([[-1.3, 0], [1.3, 0], [0, 3.2]], '#F4B860'), pc(0, -0.8, 1.45, K.LP), pc(-0.8, -1.6, 0.9, '#7FE0C0'), pc(0.85, -1.7, 0.85, '#FFE066'), pc(0.1, -2.6, 0.38, K.RD, 1)],
   cupcake: () => [pp([[-1.6, 0], [1.6, 0], [1.15, 2.0], [-1.15, 2.0]], K.SK), pe(0, -0.4, 1.9, 0.9, 0, K.LP), pc(-0.6, -1.1, 0.8, K.LP), pc(0.6, -1.2, 0.85, K.LP), pc(0, -1.9, 0.4, K.RD, 1), pr(-0.6, 1.0, 0.18, 1.8, 0.05, 0.15, '#9FDDFC', 1), pr(0.6, 1.0, 0.18, 1.8, 0.05, -0.15, '#9FDDFC', 1)],
   mushroom: () => [pp(halfEllipsePts(0, -0.2, 2.5, 1.9), K.RD), pr(0, 1.0, 1.5, 2.2, 0.45, 0, K.CR), pc(-1.2, -0.8, 0.35, K.WH, 1), pc(0.2, -1.3, 0.42, K.WH, 1), pc(1.3, -0.6, 0.3, K.WH, 1)],
-  apple: () => [pc(-0.75, 0.35, 1.65, K.RD), pc(0.75, 0.35, 1.65, K.RD), pr(0, -1.55, 0.28, 1.0, 0.1, 0.15, '#8B5A3C'), pe(0.75, -1.75, 0.65, 0.3, -0.5, K.GR), pe(-0.8, -0.1, 0.35, 0.6, 0.4, '#FF8F9C', 1)],
+  apple: () => [pc(-0.75, 0.35, 1.65, K.RD), pc(0.75, 0.35, 1.65, K.RD), pr(0, -1.55, 0.28, 1.0, 0.1, 0.15, '#E0A877'), pe(0.75, -1.75, 0.65, 0.3, -0.5, K.GR), pe(-0.8, -0.1, 0.35, 0.6, 0.4, '#FF8F9C', 1)],
   balloon: () => [pe(0, -0.5, 1.8, 2.2, 0, K.PK), pp([[-0.35, 1.85], [0.35, 1.85], [0, 1.45]], K.PK), pr(0, 2.6, 0.14, 1.3, 0.05, 0, '#9AA3BE'), pe(-0.7, -1.2, 0.35, 0.6, 0.5, '#FFB3C9', 1)],
   sun: () => [...Array.from({ length: 8 }, (_, k) => { const a = k / 8 * TAU; return pp([[Math.cos(a - 0.24) * 1.5, Math.sin(a - 0.24) * 1.5], [Math.cos(a) * 2.8, Math.sin(a) * 2.8], [Math.cos(a + 0.24) * 1.5, Math.sin(a + 0.24) * 1.5]], '#FFB703'); }), pc(0, 0, 1.8, K.Y), pc(-0.6, -0.3, 0.16, K.DK, 1), pc(0.6, -0.3, 0.16, K.DK, 1), pe(0, 0.5, 0.6, 0.22, 0, K.OR, 1)],
   moon: () => [pp(crescentPts(), K.GD), pc(-1.25, -0.45, 0.15, K.DK, 1), pe(-1.6, 0.4, 0.3, 0.18, 0, '#FFB3C9', 1)],
@@ -306,7 +294,7 @@ const TOY_DEFS = {
   whale: () => [pe(0, 0, 2.6, 1.45, 0, K.BL), pp([[-2.2, 0], [-3.4, -1.2], [-2.9, 0], [-3.4, 1.0]], K.BL), pe(0.3, 0.75, 1.8, 0.55, 0, '#9CC9FF', 1), pc(1.5, -0.2, 0.17, K.DK, 1)],
   turtle: () => [pe(0, 0, 2.0, 1.55, 0, K.GR), pc(2.35, 0, 0.65, K.LG), pe(-1.2, -1.4, 0.5, 0.4, 0, K.LG), pe(1.2, -1.4, 0.5, 0.4, 0, K.LG), pe(-1.2, 1.4, 0.5, 0.4, 0, K.LG), pe(1.2, 1.4, 0.5, 0.4, 0, K.LG), pc(0, 0, 0.7, '#4FAF5A', 1), pc(-1.05, -0.6, 0.42, '#4FAF5A', 1), pc(1.05, -0.6, 0.42, '#4FAF5A', 1), pc(-1.05, 0.6, 0.42, '#4FAF5A', 1), pc(1.05, 0.6, 0.42, '#4FAF5A', 1)],
   crown: () => [pp([[-2.6, 1.0], [2.6, 1.0], [2.6, -1.6], [1.3, -0.3], [0, -2.0], [-1.3, -0.3], [-2.6, -1.6]], K.GD), pr(0, 0.75, 5.2, 0.4, 0.1, 0, '#FFE066', 1), pc(0, 0.2, 0.35, K.RD, 1), pc(-1.5, 0.2, 0.28, K.SK, 1), pc(1.5, 0.2, 0.28, K.GR, 1)],
-  guitar: () => [pc(0, 1.1, 1.45, '#FF9F43'), pc(0, -0.4, 1.1, '#FF9F43'), pr(0, -2.3, 0.5, 2.6, 0.1, 0, '#8B5A3C'), pr(0, -3.75, 0.9, 0.75, 0.15, 0, '#8B5A3C'), pc(0, 0.55, 0.42, '#5A3A22', 1), pr(0, 1.75, 1.1, 0.2, 0.05, 0, '#5A3A22', 1)],
+  guitar: () => [pc(0, 1.1, 1.45, '#FF9F43'), pc(0, -0.4, 1.1, '#FF9F43'), pr(0, -2.3, 0.5, 2.6, 0.1, 0, '#E0A877'), pr(0, -3.75, 0.9, 0.75, 0.15, 0, '#E0A877'), pc(0, 0.55, 0.42, '#C98B5B', 1), pr(0, 1.75, 1.1, 0.2, 0.05, 0, '#C98B5B', 1)],
   umbrella: () => [pp(halfEllipsePts(0, 0, 2.8, 1.9), K.RD), pr(0, 1.25, 0.24, 2.6, 0.08, 0, K.DK), pr(-0.35, 2.45, 0.8, 0.24, 0.08, 0, K.DK), pp([[-0.9, 0], [0, -1.85], [0.9, 0]], '#FF8F9C', 1)],
   key: () => [pc(-1.6, 0, 1.05, K.GD), pr(1.0, 0, 3.6, 0.6, 0.15, 0, K.GD), pr(2.4, 0.55, 0.38, 0.6, 0.05, 0, K.GD), pr(1.7, 0.5, 0.38, 0.5, 0.05, 0, K.GD), pc(-1.6, 0, 0.45, '#E6A800', 1)],
   snail: () => [pr(0.1, 1.05, 4.6, 0.85, 0.42, 0, '#C7BFF2'), pc(-2.0, 0.8, 0.55, '#C7BFF2'), pr(-2.1, 0.0, 0.18, 1.1, 0.06, 0.2, '#C7BFF2'), pc(0.3, -0.25, 1.45, '#FF9F43'), pc(0.35, -0.25, 0.95, '#FFB86B', 1), pc(0.4, -0.25, 0.5, '#FF9F43', 2), pc(-2.2, -0.5, 0.2, K.DK, 1)],
@@ -316,9 +304,9 @@ const TOY_DEFS = {
   strawberry: () => [pp(polarPts(t => 2.2 * (1 - 0.32 * Math.sin(t)) * (1 + 0.05 * Math.cos(2 * t)), 72).map(([x, z]) => [x, z * 1.1 + 0.3]), K.RD), pp(starPts(0, -1.75, 1.2, 0.45, 6), K.GR, 1), ...[[-0.8, 0], [0.8, 0], [0, 0.6], [-0.5, 1.2], [0.5, 1.2], [-1.2, 0.8], [1.2, 0.8]].map(([x, z]) => pe(x, z, 0.08, 0.14, 0, '#FFE066', 1))],
   watermelon: () => [pp(halfEllipsePts(0, -0.8, 3.0, 2.8, false), '#5BBF5B'), pp(halfEllipsePts(0, -0.8, 2.55, 2.35, false), '#FF4D6D', 1), ...[[-1.2, 0], [0, 0.4], [1.2, 0], [-0.6, 0.9], [0.6, 0.9]].map(([x, z]) => pe(x, z, 0.1, 0.18, 0, K.DK, 2))],
   octopus: () => [pe(0, -0.7, 1.8, 1.6, 0, '#C77DFF'), ...[-1.6, -0.8, 0, 0.8, 1.6].map((x, i) => pe(x, 1.25, 0.36, 1.05, (i - 2) * 0.18, '#C77DFF')), pc(-0.65, -0.8, 0.36, K.WH, 1), pc(0.65, -0.8, 0.36, K.WH, 1), pc(-0.6, -0.75, 0.18, K.DK, 2), pc(0.7, -0.75, 0.18, K.DK, 2)],
-  dog: () => [pc(0, 0.3, 1.9, '#E0A96D'), pe(-1.9, 0.2, 0.6, 1.3, 0.2, '#8B5A3C'), pe(1.9, 0.2, 0.6, 1.3, -0.2, '#8B5A3C'), pe(0, 1.0, 1.0, 0.75, 0, K.CR, 1), pe(0, 0.7, 0.4, 0.28, 0, K.DK, 2), pc(-0.7, -0.2, 0.17, K.DK, 1), pc(0.7, -0.2, 0.17, K.DK, 1), pe(0.8, -0.8, 0.55, 0.45, 0, '#8B5A3C', 1)],
-  penguin: () => [pe(0, 0.2, 1.6, 2.3, 0, K.DK), pe(0, 0.55, 1.1, 1.75, 0, K.WH, 1), pp([[-0.3, -0.9], [0.3, -0.9], [0, -0.45]], K.OR, 2), pe(-0.6, 2.4, 0.5, 0.25, 0, K.OR), pe(0.6, 2.4, 0.5, 0.25, 0, K.OR), pc(-0.45, -1.3, 0.14, K.DK, 2), pc(0.45, -1.3, 0.14, K.DK, 2)],
-  frog: () => [pe(0, 0.5, 2.2, 1.4, 0, K.GR), pc(-1.1, -0.8, 0.75, K.GR), pc(1.1, -0.8, 0.75, K.GR), pc(-1.1, -0.85, 0.45, K.WH, 1), pc(1.1, -0.85, 0.45, K.WH, 1), pc(-1.05, -0.85, 0.22, K.DK, 2), pc(1.15, -0.85, 0.22, K.DK, 2), pr(0, 0.9, 1.6, 0.18, 0.08, 0, '#2F7A3A', 1), pc(-1.4, 0.6, 0.3, '#FF9CB5', 1), pc(1.4, 0.6, 0.3, '#FF9CB5', 1)],
+  dog: () => [pc(0, 0.3, 1.9, '#E0A96D'), pe(-1.9, 0.2, 0.6, 1.3, 0.2, '#E0A877'), pe(1.9, 0.2, 0.6, 1.3, -0.2, '#E0A877'), pe(0, 1.0, 1.0, 0.75, 0, K.CR, 1), pe(0, 0.7, 0.4, 0.28, 0, K.DK, 2), pc(-0.7, -0.2, 0.17, K.DK, 1), pc(0.7, -0.2, 0.17, K.DK, 1), pe(0.8, -0.8, 0.55, 0.45, 0, '#E0A877', 1)],
+  penguin: () => [pe(0, 0.2, 1.6, 2.3, 0, '#5AA9FF'), pe(0, 0.55, 1.1, 1.75, 0, K.WH, 1), pp([[-0.3, -0.9], [0.3, -0.9], [0, -0.45]], K.OR, 2), pe(-0.6, 2.4, 0.5, 0.25, 0, K.OR), pe(0.6, 2.4, 0.5, 0.25, 0, K.OR), pc(-0.45, -1.3, 0.14, K.DK, 2), pc(0.45, -1.3, 0.14, K.DK, 2)],
+  frog: () => [pe(0, 0.5, 2.2, 1.4, 0, K.GR), pc(-1.1, -0.8, 0.75, K.GR), pc(1.1, -0.8, 0.75, K.GR), pc(-1.1, -0.85, 0.45, K.WH, 1), pc(1.1, -0.85, 0.45, K.WH, 1), pc(-1.05, -0.85, 0.22, K.DK, 2), pc(1.15, -0.85, 0.22, K.DK, 2), pr(0, 0.9, 1.6, 0.18, 0.08, 0, '#5CC46E', 1), pc(-1.4, 0.6, 0.3, '#FF9CB5', 1), pc(1.4, 0.6, 0.3, '#FF9CB5', 1)],
 };
 const HIDDEN_SIZE = 5.6;
 const HIDDEN = Object.entries(TOY_DEFS).map(([name, make]) => ({ name, parts: normalise(make(), HIDDEN_SIZE) }));
@@ -370,18 +358,18 @@ for (const [di, dens] of POP_DENSITY.entries()) {
 }
 // Bright colourways: palette x colouring pattern. Cosmetic only, so they are counted separately from layouts.
 const POP_PALETTES = [
-  [['#FF5C7A', '#FF9F43', '#FFD93D', '#6BCB77', '#4D96FF', '#9B5DE5'], '#2E3156'], [['#FF8FC7', '#FFB3DE', '#B28DFF', '#8FD3FF', '#FFF07C'], '#3B3F78'],
-  [['#FF3EA5', '#00F5D4', '#FEE440', '#9B5DE5', '#00BBF9'], '#1F2240'], [['#FF4E50', '#FC913A', '#F9D423', '#FF6F91', '#FF9671'], '#3A2E5C'],
-  [['#00B4D8', '#48CAE4', '#90E0EF', '#0096C7', '#00F5D4'], '#FFFFFF'], [['#FF6B6B', '#FFD93D', '#6BCB77', '#4ECDC4', '#FF9F1C'], '#FFFFFF'],
-  [['#F72585', '#FF5E9C', '#B5179E', '#7209B7', '#FF8FAB'], '#FFE5EF'], [['#FFD60A', '#FFC300', '#A7E22E', '#FF9F1C', '#FFE66D'], '#2B4C7E'],
-  [['#2EC4B6', '#80ED99', '#57CC99', '#38D9A9', '#C7F9CC'], '#22325A'], [['#FF99C8', '#FCF6BD', '#D0F4DE', '#A9DEF9', '#E4C1F9'], '#3E4A89'],
-  [['#FF4800', '#FF6D00', '#FF9E00', '#FFC300', '#FF006E'], '#2A1E3F'], [['#7400B8', '#6930C3', '#5E60CE', '#4EA8DE', '#48BFE3', '#64DFDF'], '#FFFFFF'],
-  [['#F94144', '#F3722C', '#F8961E', '#F9C74F', '#90BE6D', '#43AA8B'], '#FFFFFF'], [['#FF5D8F', '#FF97B7', '#FFC4D6', '#FF4D8D', '#FFB3C6'], '#2D3561'],
-  [['#B5E48C', '#99D98C', '#76C893', '#D9ED92', '#52B69A'], '#1E3A5F'], [['#4CC9F0', '#4895EF', '#4361EE', '#7FDBFF', '#3A86FF'], '#FFFFFF'],
-  [['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#BDB2FF'], '#3B3F78'], [['#C77DFF', '#9D4EDD', '#E0AAFF', '#7B2CBF', '#F2B5FF'], '#FFF4E6'],
-  [['#FF6F59', '#43AA8B', '#FFD166', '#06D6A0', '#118AB2'], '#FFFFFF'], [['#FFC6FF', '#BDB2FF', '#A0C4FF', '#9BF6FF', '#CAFFBF'], '#4A4E8F'],
-  [['#FF4D6D', '#FF8FA3', '#7CC576', '#FFB3C1', '#38B000'], '#FFF1F3'], [['#FFD166', '#EF476F', '#06D6A0', '#FFF3B0', '#118AB2'], '#2E3156'],
-  [['#FF006E', '#FB5607', '#FFBE0B', '#3A86FF', '#8338EC'], '#FFFFFF'], [['#F15BB5', '#FEE440', '#00BBF9', '#00F5D4', '#9B5DE5'], '#26294A'],
+  [['#FF5C7A', '#FF9F43', '#FFD93D', '#6BCB77', '#4D96FF', '#9B5DE5'], '#FFF4D6'], [['#FF8FC7', '#FFB3DE', '#B28DFF', '#8FD3FF', '#FFF07C'], '#E4E8FF'],
+  [['#FF3EA5', '#00F5D4', '#FEE440', '#9B5DE5', '#00BBF9'], '#FFFFFF'], [['#FF4E50', '#FC913A', '#F9D423', '#FF6F91', '#FF9671'], '#FFE8D6'],
+  [['#00B4D8', '#48CAE4', '#90E0EF', '#38BDF8', '#00F5D4'], '#FFFFFF'], [['#FF6B6B', '#FFD93D', '#6BCB77', '#4ECDC4', '#FF9F1C'], '#FFFFFF'],
+  [['#F72585', '#FF5E9C', '#E04DCB', '#C77DFF', '#FF8FAB'], '#FFE5EF'], [['#FFD60A', '#FFC300', '#A7E22E', '#FF9F1C', '#FFE66D'], '#DDF3FF'],
+  [['#2EC4B6', '#80ED99', '#57CC99', '#38D9A9', '#C7F9CC'], '#FFF0F6'], [['#FF99C8', '#FCF6BD', '#D0F4DE', '#A9DEF9', '#E4C1F9'], '#FFFFFF'],
+  [['#FF4800', '#FF6D00', '#FF9E00', '#FFC300', '#FF006E'], '#FFF7E0'], [['#B388FF', '#A685FF', '#8C8FFF', '#4EA8DE', '#48BFE3', '#64DFDF'], '#FFFFFF'],
+  [['#F94144', '#F3722C', '#F8961E', '#F9C74F', '#90BE6D', '#43AA8B'], '#FFFFFF'], [['#FF5D8F', '#FF97B7', '#FFC4D6', '#FF4D8D', '#FFB3C6'], '#FFFFFF'],
+  [['#B5E48C', '#99D98C', '#76C893', '#D9ED92', '#52B69A'], '#FFF6E5'], [['#4CC9F0', '#4895EF', '#6C8CFF', '#7FDBFF', '#3A86FF'], '#FFFFFF'],
+  [['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#BDB2FF'], '#E4E8FF'], [['#C77DFF', '#C08BFF', '#E0AAFF', '#B57BFF', '#F2B5FF'], '#FFF4E6'],
+  [['#FF6F59', '#43AA8B', '#FFD166', '#06D6A0', '#3EC1E8'], '#FFFFFF'], [['#FFC6FF', '#BDB2FF', '#A0C4FF', '#9BF6FF', '#CAFFBF'], '#FFFFFF'],
+  [['#FF4D6D', '#FF8FA3', '#7CC576', '#FFB3C1', '#38B000'], '#FFF1F3'], [['#FFD166', '#EF476F', '#06D6A0', '#FFF3B0', '#3EC1E8'], '#FFF4D6'],
+  [['#FF006E', '#FB5607', '#FFBE0B', '#3A86FF', '#A66BFF'], '#FFFFFF'], [['#F15BB5', '#FEE440', '#00BBF9', '#00F5D4', '#9B5DE5'], '#FFF0FA'],
 ].map(([colors, board]) => ({ colors, board }));
 const POP_PATTERNS = ['rows', 'columns', 'rings', 'diagonal', 'wheel', 'confetti', 'checker'];
 function popColourIndex(pattern, b, i, sp, n) {
@@ -479,8 +467,8 @@ const PopDomain = {
 };
 
 /* ───────────── domain: Sand Slice ───────────── */
-// Cuts split the piece along the chord through the gesture's midpoint, so concave shapes work too.
-const SAND = { H: 1.25, MIN_W: 0.42, MIN_AREA: 0.3, GAP: 0.14, CUTS: 6, COVER: 0.6, MIN_LEN: 0.9, COS: Math.cos(30 * Math.PI / 180) };
+// A cut splits the piece along the chord where the knife entered, so concave shapes work too.
+const SAND = { H: 1.25, MIN_W: 0.42, MIN_AREA: 0.3, GAP: 0.14, CUTS: 6, LATERAL: 0.6, LATERAL_SLOPE: 0.3, EDGE: 0.12 };
 // Every crossing of the line ml + t·u with the polygon, sorted along t, each with the edge it lies on.
 function lineHits(poly, ml, u) {
   const hits = [];
@@ -514,41 +502,47 @@ const SandDomain = {
     const poly = cfg.shape.poly.map(p => p.slice());
     return { cfg, u, n: [-u[1], u[0]], pieces: [{ poly, shift: [0, 0] }], cuts: [], gesture: null, area0: Math.abs(polyArea(poly)), seq: 0 };
   },
+  // Real time: the cut follows the knife and the block splits the moment the knife has crossed it.
   dispatch(m, a) {
     const ev = [];
-    if (a.type === 'down') m.gesture = { a: [a.x, a.z], b: [a.x, a.z] };
-    else if (a.type === 'move' && m.gesture) m.gesture.b = [a.x, a.z];
+    if (a.type === 'down') { m.gesture = { status: 'seeking', at: [a.x, a.z], prev: null }; this.track(m, a.x, a.z, ev); }
+    else if (a.type === 'move' && m.gesture) { m.gesture.prev = m.gesture.at; m.gesture.at = [a.x, a.z]; this.track(m, a.x, a.z, ev); }
     else if (a.type === 'up' && m.gesture) {
-      if (a.x !== undefined) m.gesture.b = [a.x, a.z];
-      const r = this.evaluate(m, m.gesture.a, m.gesture.b);
-      m.gesture = null;
-      if (r.ok) this.commit(m, r, ev);
-      else ev.push({ type: 'cut-rejected', reason: r.reason, line: r.line });
-    } else if (a.type === 'cancel') m.gesture = null; // an unfinished cut is discarded, never committed
+      const g = m.gesture; m.gesture = null;
+      if (g.status === 'cutting' && g.tHi - g.tLo > 0.3 * (g.tmax - g.tmin)) ev.push({ type: 'cut-rejected', reason: 'short', line: g.line });
+    } else if (a.type === 'cancel') m.gesture = null; // an unfinished cut heals; it is never committed
     return ev;
   },
-  evaluate(m, a, b) {
-    const res = { ok: false, reason: 'short', line: { from: a, to: b } };
-    if (m.cuts.length >= SAND.CUTS) { res.reason = 'done'; return res; }
-    const dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz);
-    if (len < SAND.MIN_LEN) return res;
-    const u = m.u, n = m.n;
-    if (Math.abs((dx * u[0] + dz * u[1]) / len) < SAND.COS) { res.reason = 'direction'; return res; }
-    const mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-    const idx = m.pieces.findIndex(p => pointInPoly(mid[0] - p.shift[0], mid[1] - p.shift[1], p.poly));
-    if (idx < 0) { res.reason = 'miss'; return res; }
-    const p = m.pieces[idx], s = p.shift, ml = [mid[0] - s[0], mid[1] - s[1]];
-    const chord = chordAt(p.poly, ml, u);
-    if (!chord) { res.reason = 'miss'; return res; }
-    const tmin = chord[0].t, tmax = chord[1].t;
-    res.line = { from: [ml[0] + u[0] * tmin + s[0], ml[1] + u[1] * tmin + s[1]], to: [ml[0] + u[0] * tmax + s[0], ml[1] + u[1] * tmax + s[1]] };
-    const ga = (a[0] - s[0] - ml[0]) * u[0] + (a[1] - s[1] - ml[1]) * u[1];
-    const gb = (b[0] - s[0] - ml[0]) * u[0] + (b[1] - s[1] - ml[1]) * u[1];
-    const cover = (Math.min(Math.max(ga, gb), tmax) - Math.max(Math.min(ga, gb), tmin)) / (tmax - tmin);
-    if (cover < SAND.COVER) { res.reason = 'short'; return res; }
-    const [A, B] = splitAlong(p.poly, ml, u, chord[0], chord[1]);
-    if (A.length < 3 || B.length < 3 || Math.min(extentAlong(A, n), extentAlong(B, n)) < SAND.MIN_W || Math.min(Math.abs(polyArea(A)), Math.abs(polyArea(B))) < SAND.MIN_AREA) { res.reason = 'thin'; return res; }
-    return { ok: true, idx, ml, A, B, line: res.line, chord: tmax - tmin };
+  track(m, x, z, ev) {
+    const g = m.gesture, u = m.u, n = m.n;
+    if (g.status === 'done' || g.status === 'invalid' || m.cuts.length >= SAND.CUTS) return;
+    if (g.status === 'seeking') {
+      // The cut line is fixed where the knife first touches sand, along the allowed direction.
+      const idx = m.pieces.findIndex(p => pointInPoly(x - p.shift[0], z - p.shift[1], p.poly));
+      if (idx < 0) return;
+      const p = m.pieces[idx], s = p.shift, ml = [x - s[0], z - s[1]], chord = chordAt(p.poly, ml, u);
+      if (!chord) return;
+      const [A, B] = splitAlong(p.poly, ml, u, chord[0], chord[1]), tmin = chord[0].t, tmax = chord[1].t;
+      const line = { from: [ml[0] + u[0] * tmin + s[0], ml[1] + u[1] * tmin + s[1]], to: [ml[0] + u[0] * tmax + s[0], ml[1] + u[1] * tmax + s[1]] };
+      Object.assign(g, { idx, ml, shift: s.slice(), tmin, tmax, tLo: 0, tHi: 0, line, A, B });
+      if (A.length < 3 || B.length < 3 || Math.min(extentAlong(A, n), extentAlong(B, n)) < SAND.MIN_W || Math.min(Math.abs(polyArea(A)), Math.abs(polyArea(B))) < SAND.MIN_AREA) {
+        g.status = 'invalid'; ev.push({ type: 'cut-rejected', reason: 'thin', line }); return;
+      }
+      g.status = 'cutting';
+      // Coming in from outside the sand, the knife has already crossed the edge it entered by.
+      if (g.prev) { const tp = (g.prev[0] - s[0] - ml[0]) * u[0] + (g.prev[1] - s[1] - ml[1]) * u[1]; if (tp < 0) g.tLo = tmin; else g.tHi = tmax; }
+    }
+    const dx = x - g.shift[0] - g.ml[0], dz = z - g.shift[1] - g.ml[1], t = dx * u[0] + dz * u[1];
+    if (Math.abs(dx * n[0] + dz * n[1]) > SAND.LATERAL + SAND.LATERAL_SLOPE * Math.abs(t)) {
+      g.status = 'invalid'; ev.push({ type: 'cut-rejected', reason: 'direction', line: g.line }); return;
+    }
+    const lo = Math.max(g.tmin, Math.min(g.tLo, t)), hi = Math.min(g.tmax, Math.max(g.tHi, t)), gained = (g.tLo - lo) + (hi - g.tHi);
+    g.tLo = lo; g.tHi = hi;
+    if (gained > 0) ev.push({ type: 'cut-progress', amount: gained, at: [x, z] });
+    if (g.tLo <= g.tmin + SAND.EDGE && g.tHi >= g.tmax - SAND.EDGE) {
+      g.status = 'done';
+      this.commit(m, { idx: g.idx, ml: g.ml, A: g.A, B: g.B, line: g.line, chord: g.tmax - g.tmin }, ev);
+    }
   },
   commit(m, r, ev) {
     m.pieces.splice(r.idx, 1, { poly: r.A, shift: [0, 0] }, { poly: r.B, shift: [0, 0] });
@@ -584,6 +578,7 @@ function sandFeasible(cfg) {
     if (!piece) continue;
     const w = [loc[0] + piece.shift[0], loc[1] + piece.shift[1]], reach = (best[1] - best[0]) / 2 + 0.3;
     SandDomain.dispatch(m, { type: 'down', x: w[0] - m.u[0] * reach, z: w[1] - m.u[1] * reach });
+    for (let k = 1; k <= 40; k++) { const f = -reach + 2 * reach * k / 40; SandDomain.dispatch(m, { type: 'move', x: w[0] + m.u[0] * f, z: w[1] + m.u[1] * f }); }
     SandDomain.dispatch(m, { type: 'up', x: w[0] + m.u[0] * reach, z: w[1] + m.u[1] * reach });
   }
   return SandDomain.isComplete(m) && SandDomain.materialError(m) < 1e-6;
@@ -647,12 +642,12 @@ const FoamDomain = {
 /* ───────────── presentation: shared resources ───────────── */
 // Matcaps carry the lighting. Each environment repaints them, so every toy picks up that set's light.
 const LIGHTS = {
-  toybox: { key: '#FFFCF6', fill: '#9AA3BE', spec: '#FFFFFF', rim: ['#FFD2C8', 0.25] },
+  toybox: { key: '#FFFCF6', fill: '#C6CDEB', spec: '#FFFFFF', rim: ['#FFD2C8', 0.25] },
 };
 const MATCAP_SPECS = {
   plastic: { shade: 1, rim: 0.28, spec: 0.9, size: 0.17 },
   matte: { shade: 0.72, rim: 0.18, spec: 0.12, size: 0.35 },
-  metal: { shade: 1.4, rim: 0.45, spec: 1, size: 0.12 },
+  metal: { shade: 0.9, rim: 0.3, spec: 1, size: 0.12 },
   soap: { shade: 0.45, rim: 0.12, spec: 1, size: 0.16, iris: 0.35 },
 };
 const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${n >> 8 & 255},${n & 255},${a})`; };
@@ -666,7 +661,7 @@ function paintMatcaps(L) {
     gr.addColorStop(0, `#${key.getHexString()}`); gr.addColorStop(1, `#${shade.getHexString()}`);
     g.fillStyle = gr; g.fillRect(0, 0, s, s);
     gr = g.createRadialGradient(s / 2, s / 2, s * 0.34, s / 2, s / 2, s * 0.5);
-    gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, `rgba(0,0,0,${sp.rim})`);
+    gr.addColorStop(0, rgba(L.fill, 0)); gr.addColorStop(1, rgba(L.fill, sp.rim));
     g.fillStyle = gr; g.fillRect(0, 0, s, s);
     gr = g.createRadialGradient(s * 0.82, s * 0.84, 0, s * 0.82, s * 0.84, s * 0.5);
     gr.addColorStop(0, rgba(L.rim[0], L.rim[1])); gr.addColorStop(1, rgba(L.rim[0], 0));
@@ -690,7 +685,7 @@ function paintMatcaps(L) {
 function makeShadowTex() {
   const s = 128, c = document.createElement('canvas'); c.width = c.height = s;
   const g = c.getContext('2d'), gr = g.createRadialGradient(s / 2, s / 2, s * 0.18, s / 2, s / 2, s * 0.5);
-  gr.addColorStop(0, 'rgba(0,0,0,0.42)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  gr.addColorStop(0, 'rgba(120,132,205,0.32)'); gr.addColorStop(1, 'rgba(120,132,205,0)');
   g.fillStyle = gr; g.fillRect(0, 0, s, s);
   return new THREE.CanvasTexture(c);
 }
@@ -713,6 +708,7 @@ const SHARED = {
   plane: new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2),
 };
 const COLORS = { accent: new THREE.Color(), bad: new THREE.Color() };
+const CUT_GLINT = new THREE.Color('#FFFFFF'), WHITE = new THREE.Color('#FFFFFF');
 const ENV_BG = new THREE.Color('#D9D3F1');
 
 function roundRectShape(w, d, r) {
@@ -762,8 +758,8 @@ class PopView extends BaseView {
       c.set(pal.colors[((k % n) + n) % n]);
       this.base.push(c.clone());
       this.h[i] = m.popped[i] ? POP_H1 : POP_H0;
-      this.domes.setColorAt(i, m.popped[i] ? c.clone().multiplyScalar(0.72) : c);
-      this.rims.setColorAt(i, c.clone().multiplyScalar(0.82));
+      this.domes.setColorAt(i, m.popped[i] ? c.clone().lerp(WHITE, 0.25) : c);
+      this.rims.setColorAt(i, c.clone().lerp(WHITE, 0.3));
       this.write(i, 1);
       this.mat.compose(this.pos.set(b.x, this.top, b.z), this.q, this.scl.set(b.r * 1.08, b.r * 1.08, b.r * 1.08));
       this.rims.setMatrixAt(i, this.mat);
@@ -783,7 +779,7 @@ class PopView extends BaseView {
   onEvent(e) {
     if (e.type !== 'bubble-popped') return;
     this.t[e.i] = 0;
-    this.domes.setColorAt(e.i, this.base[e.i].clone().multiplyScalar(0.72));
+    this.domes.setColorAt(e.i, this.base[e.i].clone().lerp(WHITE, 0.25));
     this.domes.instanceColor.needsUpdate = true;
   }
   payoffDuration() { return reduceMotion.matches ? 0.45 : 1.4; }
@@ -826,7 +822,7 @@ function sandTextures(layers) {
   const top = document.createElement('canvas'); top.width = top.height = 128;
   const t = top.getContext('2d'); t.fillStyle = layers[0]; t.fillRect(0, 0, 128, 128);
   for (const [ctx, w, h] of [[g, 128, 256], [t, 128, 128]]) {
-    for (let k = 0; k < w * h / 9; k++) { ctx.fillStyle = `rgba(${rnd() < 0.5 ? '255,255,255' : '60,40,30'},${0.05 + rnd() * 0.1})`; ctx.fillRect(rnd() * w, rnd() * h, 1.4, 1.4); }
+    for (let k = 0; k < w * h / 9; k++) { ctx.fillStyle = `rgba(${rnd() < 0.5 ? '255,255,255' : '190,150,130'},${0.05 + rnd() * 0.1})`; ctx.fillRect(rnd() * w, rnd() * h, 1.4, 1.4); }
   }
   const make = (c) => { const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace; tx.wrapS = tx.wrapT = THREE.RepeatWrapping; return tx; };
   const sideTex = make(side), topTex = make(top);
@@ -840,7 +836,7 @@ class SandView extends BaseView {
     this.m = m;
     const [tw, td] = m.cfg.shape.tray;
     this.trayTop = 0.3;
-    this.root.add(new THREE.Mesh(this.own(slab(roundRectShape(tw, td, 0.7), 0.2, 0.05)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: '#B98B62' }))));
+    this.root.add(new THREE.Mesh(this.own(slab(roundRectShape(tw, td, 0.7), 0.2, 0.05)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: '#F0CFA8' }))));
     this.shadow(tw * 1.3, td * 1.3);
     const { sideTex, topTex } = sandTextures(m.cfg.shape.layers);
     this.own(sideTex); this.own(topTex);
@@ -879,6 +875,7 @@ class SandView extends BaseView {
   }
   onEvent(e) {
     if (e.type === 'cut-rejected') { this.flash = { line: e.line, t: 0 }; return; }
+    if (e.type === 'cut-progress') { if (!reduceMotion.matches) this.spill(e.at, Math.min(4, Math.ceil(e.amount * 10))); return; }
     if (e.type !== 'cut-committed') return;
     const old = this.meshes[e.idx], from = [old.position.x, old.position.z];
     this.root.remove(old); old.geometry.dispose();
@@ -897,6 +894,24 @@ class SandView extends BaseView {
       }
     }
   }
+  // A few grains crumble off the knife as it moves through the sand.
+  spill(at, count) {
+    for (let k = 0; k < count; k++) {
+      const i = this.gNext; this.gNext = (this.gNext + 1) % this.gl.length;
+      this.gp.set([at[0] + (Math.random() - 0.5) * 0.2, this.surfaceY + 0.02, at[1] + (Math.random() - 0.5) * 0.2], i * 3);
+      const s = (Math.random() < 0.5 ? -1 : 1) * (0.3 + Math.random() * 0.6);
+      this.gv.set([this.m.n[0] * s, 0.6 + Math.random() * 1.0, this.m.n[1] * s], i * 3);
+      this.gl[i] = 0.6 + Math.random() * 0.4;
+    }
+  }
+  setLine(from, to, color, opacity) {
+    const len = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    this.line.visible = len > 0.03;
+    this.line.position.set((from[0] + to[0]) / 2, this.surfaceY + 0.02, (from[1] + to[1]) / 2);
+    this.line.rotation.y = -Math.atan2(to[1] - from[1], to[0] - from[0]);
+    this.line.scale.x = Math.max(0.01, len);
+    this.lineMat.color.copy(color); this.lineMat.opacity = opacity;
+  }
   payoffDuration() { return reduceMotion.matches ? 0.45 : 1.1; }
   update(dt, time, round) {
     const k = 1 - Math.exp(-dt * 10), spread = round.state !== 'playing' && !reduceMotion.matches ? 1 + 1.6 * easeInOut(Math.min(1, round.t / 0.8)) : 1;
@@ -907,33 +922,25 @@ class SandView extends BaseView {
       const w = mesh.userData.wob;
       if (w > 0) { mesh.userData.wob = Math.max(0, w - dt * 2.2); mesh.scale.y = 1 - 0.06 * Math.sin((1 - mesh.userData.wob) * Math.PI * 3) * mesh.userData.wob; }
     });
-    const g = this.m.gesture;
+    const g = this.m.gesture, u = this.m.u;
     if (g) {
-      const r = SandDomain.evaluate(this.m, g.a, g.b), { from, to } = r.line;
-      const len = Math.hypot(to[0] - from[0], to[1] - from[1]);
-      this.line.visible = len > 0.05;
-      this.line.position.set((from[0] + to[0]) / 2, this.surfaceY + 0.02, (from[1] + to[1]) / 2);
-      this.line.rotation.y = -Math.atan2(to[1] - from[1], to[0] - from[0]);
-      this.line.scale.x = Math.max(0.01, len);
-      this.lineMat.color.copy(r.ok ? COLORS.accent : COLORS.bad);
+      // The knife rides the pointer and sinks into the sand while it is cutting; the open cut trails behind it.
       this.knife.visible = true;
-      this.knife.position.x = g.b[0]; this.knife.position.z = g.b[1];
-      this.knife.rotation.y = Math.atan2(this.m.u[0], this.m.u[1]);
-      const targetY = r.ok ? this.surfaceY - 0.35 : this.surfaceY + 0.35;
-      this.knifeY += (targetY - this.knifeY) * (1 - Math.exp(-dt * 14));
+      this.knife.position.x = g.at[0]; this.knife.position.z = g.at[1];
+      this.knife.rotation.y = Math.atan2(u[0], u[1]);
+      const targetY = g.status === 'cutting' ? this.surfaceY - 0.45 : this.surfaceY + 0.35;
+      this.knifeY += (targetY - this.knifeY) * (1 - Math.exp(-dt * 16));
       this.knife.position.y = this.knifeY;
+      if (g.status === 'cutting' && g.tHi > g.tLo) {
+        const P = (t) => [g.ml[0] + u[0] * t + g.shift[0], g.ml[1] + u[1] * t + g.shift[1]];
+        this.setLine(P(g.tLo), P(g.tHi), CUT_GLINT, 0.9);
+      } else if (g.status === 'invalid') this.setLine(g.line.from, g.line.to, COLORS.bad, 0.9);
+      else this.line.visible = false;
     } else {
       this.knife.visible = false; this.knifeY = this.surfaceY + 0.5;
       const f = this.flash;
-      if (f && f.t < 0.7) {
-        f.t += dt;
-        const { from, to } = f.line, len = Math.hypot(to[0] - from[0], to[1] - from[1]);
-        this.line.visible = len > 0.05;
-        this.line.position.set((from[0] + to[0]) / 2, this.surfaceY + 0.02, (from[1] + to[1]) / 2);
-        this.line.rotation.y = -Math.atan2(to[1] - from[1], to[0] - from[0]);
-        this.line.scale.x = Math.max(0.01, len);
-        this.lineMat.color.copy(COLORS.bad); this.lineMat.opacity = 0.9 * (1 - f.t / 0.7);
-      } else { this.line.visible = false; this.lineMat.opacity = 0.9; }
+      if (f && f.t < 0.7) { f.t += dt; this.setLine(f.line.from, f.line.to, COLORS.bad, 0.9 * (1 - f.t / 0.7)); }
+      else this.line.visible = false;
     }
     let live = false;
     for (let i = 0; i < this.gl.length; i++) {
@@ -1096,7 +1103,7 @@ function feltTexture(hex) {
   const s = 128, c = document.createElement('canvas'); c.width = c.height = s;
   const g = c.getContext('2d'), rnd = mulberry32(5);
   g.fillStyle = hex; g.fillRect(0, 0, s, s);
-  for (let k = 0; k < 2600; k++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '255,255,255' : '0,0,0'},${0.03 + rnd() * 0.05})`; g.fillRect(rnd() * s, rnd() * s, 1, 1 + rnd() * 2); }
+  for (let k = 0; k < 2600; k++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '255,255,255' : '160,170,210'},${0.03 + rnd() * 0.05})`; g.fillRect(rnd() * s, rnd() * s, 1, 1 + rnd() * 2); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); return t;
 }
 function star(g, x, y, r, col) {
@@ -1111,7 +1118,7 @@ function emblemTexture() {
   g.fillStyle = '#FFF6E8'; g.beginPath(); g.roundRect ? g.roundRect(0, 0, w, h, h * 0.22) : g.rect(0, 0, w, h); g.fill();
   const rr = (x, y, rw, rh, r, col) => { g.fillStyle = col; g.beginPath(); g.roundRect ? g.roundRect(x, y, rw, rh, r) : g.rect(x, y, rw, rh); g.fill(); };
   let x = w * 0.25;
-  rr(x - s, cy - s * 0.8, 2 * s, 1.6 * s, s * 0.35, '#3B4272');
+  rr(x - s, cy - s * 0.8, 2 * s, 1.6 * s, s * 0.35, '#CFE3FF');
   ['#FF6B8B', '#FFD45A', '#5AC8FA', '#7BD88F', '#A08CFF', '#FF9F5A'].forEach((col, i) => { g.fillStyle = col; g.beginPath(); g.arc(x + ((i % 3) - 1) * s * 0.62, cy + (Math.floor(i / 3) - 0.5) * s * 0.7, s * 0.24, 0, Math.PI * 2); g.fill(); });
   x = w * 0.5;
   ['#F6B4C8', '#FBE2B0', '#B8E2CC', '#C7BFF2'].forEach((col, i) => rr(x - s * 1.05, cy - s * 0.8 + i * s * 0.4, s * 2.1, s * 0.42, s * 0.12, col));
@@ -1310,14 +1317,15 @@ const Sound = {
     [659, 880, 1175].forEach((f, i) => this.voice(0.7, (ctx, t) => { const o = ctx.createOscillator(); o.frequency.value = f; const s = t + i * 0.09; o.connect(this.env(ctx, s, 0.2, 0.01, 0.55)); o.start(s); o.stop(s + 0.6); }));
   },
   // Brushing texture follows how much foam actually cleared this frame.
-  brushTick(energy, dt) {
+  brushTick(energy, dt, freq = 1600) {
     if (!this.ctx) return;
     if (!this.brush) {
       const src = this.ctx.createBufferSource(), lp = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
       src.buffer = this.noise; src.loop = true; lp.type = 'lowpass'; lp.frequency.value = 1600; g.gain.value = 0;
       src.connect(lp).connect(g).connect(this.master); src.start();
-      this.brush = { src, g };
+      this.brush = { src, g, lp };
     }
+    this.brush.lp.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.05);
     const target = Math.min(1, energy / Math.max(dt, 1 / 120) * 0.06);
     this.brushLevel += (target - this.brushLevel) * Math.min(1, dt * 18);
     this.brush.g.gain.setTargetAtTime(this.brushLevel * 0.35, this.ctx.currentTime, 0.03);
@@ -1342,7 +1350,7 @@ canvas.addEventListener('webglcontextlost', (e) => e.preventDefault());
 function readTheme() {
   const cs = getComputedStyle(document.documentElement);
   COLORS.accent.set(cs.getPropertyValue('--accent').trim() || '#E2426F');
-  COLORS.bad.set(cs.getPropertyValue('--bad').trim() || '#C93A3A');
+  COLORS.bad.set(cs.getPropertyValue('--bad').trim() || '#FF6B6B');
 }
 readTheme();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
@@ -1433,7 +1441,7 @@ const Cue = {
     const fadeOut = Math.max(0, (this.t - press - travel) / press);
     g.globalAlpha = 1 - Math.min(1, fadeOut); g.stroke();
     const pressK = this.t < press ? this.t / press : 1;
-    g.shadowColor = 'rgba(20,24,40,0.35)'; g.shadowBlur = 10 * u; g.shadowOffsetY = 3 * u;
+    g.shadowColor = 'rgba(110,124,200,0.35)'; g.shadowBlur = 10 * u; g.shadowOffsetY = 3 * u;
     g.fillStyle = 'rgba(255,255,255,0.95)'; g.beginPath(); g.arc(px, py, (22 - 6 * pressK) * u, 0, Math.PI * 2); g.fill();
     g.shadowColor = 'transparent';
     if (!reduceMotion.matches && this.t < press * 2) { g.strokeStyle = `rgba(255,255,255,${0.8 * (1 - this.t / (press * 2))})`; g.lineWidth = 3 * u; g.beginPath(); g.arc(px, py, (22 + 30 * this.t / (press * 2)) * u, 0, Math.PI * 2); g.stroke(); }
@@ -1490,6 +1498,7 @@ function handle(events) {
     else if (e.type === 'cut-committed') Sound.slice(e.chord);
     else if (e.type === 'cut-rejected') { Sound.reject(); Cue.show(2); }
     else if (e.type === 'foam-cleared') brushEnergy += e.amount;
+    else if (e.type === 'cut-progress') brushEnergy += e.amount * 0.6;
   }
   if (events.length) updateHUD();
   if (r.state === 'playing' && TOYS[current].domain.isComplete(r.domain)) {
@@ -1599,7 +1608,7 @@ function frame(now) {
   env.update(dt, now / 1000);
   if (r.state === 'completing') { r.t += dt; if (r.t >= r.view.payoffDuration()) { r.state = 'result'; showResult(true); updateHUD(); } }
   else if (r.state === 'result') r.t += dt;
-  if (current === 'foam') { if (activePointer !== null) Sound.brushTick(brushEnergy, dt); brushEnergy = 0; }
+  if (current !== 'pop') { if (activePointer !== null) Sound.brushTick(brushEnergy, dt, current === 'sand' ? 3200 : 1600); brushEnergy = 0; }
   renderer.render(r.view.scene, camera);
   Cue.update(dt, r);
   if (!firstFrame) { firstFrame = performance.now(); $('loading').hidden = true; }
