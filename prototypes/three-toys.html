@@ -127,9 +127,9 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
     <div class="bar" role="progressbar" aria-label="Round progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar"><i id="bar-fill"></i></div>
   </div>
   <div class="envs" role="radiogroup" aria-label="Environment">
-    <button class="env" role="radio" data-env="sweep" aria-checked="true"><i style="background: linear-gradient(135deg, #FFE6A0 33%, #CDE5FF 33% 66%, #FFD2C2 66%)"></i>Sweep</button>
-    <button class="env" role="radio" data-env="podium" aria-checked="false"><i style="background: radial-gradient(circle at 50% 62%, #FFFFFF 0 42%, #FFC6B3 43% 58%, #FFEDE3 59%)"></i>Podium</button>
-    <button class="env" role="radio" data-env="flatlay" aria-checked="false"><i style="background: repeating-linear-gradient(0deg, #F2FFFB 0 1px, transparent 1px 4px), repeating-linear-gradient(90deg, #F2FFFB 0 1px, #86D4C4 1px 4px)"></i>Flat lay</button>
+    <button class="env" role="radio" data-env="toybox" aria-checked="true"><i style="background: linear-gradient(180deg, #FF7B6B 0 30%, #FFF4E4 30% 45%, #C4EBDD 45%)"></i>Toybox</button>
+    <button class="env" role="radio" data-env="shelf" aria-checked="false"><i style="background: linear-gradient(180deg, #FFE6A0 0 33%, #CDE5FF 33% 66%, #FFD2C2 66%)"></i>Collection</button>
+    <button class="env" role="radio" data-env="factory" aria-checked="false"><i style="background: radial-gradient(circle at 50% 45%, #FFFFFF 0 28%, #8EDBC9 30% 62%, #7CC6F7 64%)"></i>Factory</button>
   </div>
   <div class="row">
     <button class="btn" id="reset">Reset</button>
@@ -467,9 +467,9 @@ const FoamDomain = {
 /* ───────────── presentation: shared resources ───────────── */
 // Matcaps carry the lighting. Each environment repaints them, so every toy picks up that set's light.
 const LIGHTS = {
-  sweep: { key: '#FFFFFF', fill: '#9298B0', spec: '#FFFFFF', rim: ['#FFFFFF', 0.25] },
-  podium: { key: '#FFFBF6', fill: '#A497B4', spec: '#FFFFFF', rim: ['#FFD9C9', 0.3] },
-  flatlay: { key: '#FFFFFF', fill: '#8EA4A8', spec: '#FFFFFF', rim: ['#D9FFF6', 0.2] },
+  toybox: { key: '#FFFCF6', fill: '#9AA3BE', spec: '#FFFFFF', rim: ['#FFD2C8', 0.25] },
+  shelf: { key: '#FFFBF7', fill: '#A49AB2', spec: '#FFFFFF', rim: ['#FFE0CF', 0.25] },
+  factory: { key: '#FFFFFF', fill: '#968FC0', spec: '#FFFFFF', rim: ['#CFF3FF', 0.28] },
 };
 const MATCAP_SPECS = {
   plastic: { shade: 1, rim: 0.28, spec: 0.9, size: 0.17 },
@@ -521,7 +521,7 @@ for (const k in MATCAP_SPECS) {
   const c = document.createElement('canvas'); c.width = c.height = 256;
   MATCAP[k] = new THREE.CanvasTexture(c); MATCAP[k].colorSpace = THREE.SRGBColorSpace;
 }
-paintMatcaps(LIGHTS.sweep);
+paintMatcaps(LIGHTS.toybox);
 const SHARED = {
   dome: new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2),
   rim: new THREE.TorusGeometry(1, 0.13, 8, 32).rotateX(Math.PI / 2),
@@ -556,9 +556,9 @@ const easeOutBack = (k) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * (k
 const easeInOut = (k) => k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
 
 class BaseView {
-  constructor() { this.scene = new THREE.Scene(); this.scene.background = ENV_BG; this.owned = []; }
+  constructor() { this.scene = new THREE.Scene(); this.scene.background = ENV_BG; this.root = new THREE.Group(); this.scene.add(this.root); this.owned = []; }
   own(x) { this.owned.push(x); return x; }
-  shadow(w, d, y = 0.002) { const s = new THREE.Mesh(SHARED.plane, SHARED.shadow); s.scale.set(w, 1, d); s.position.y = y; s.renderOrder = -1; this.scene.add(s); }
+  shadow(w, d, y = 0.002) { const s = new THREE.Mesh(SHARED.plane, SHARED.shadow); s.scale.set(w, 1, d); s.position.y = y; s.renderOrder = -1; this.root.add(s); }
   dispose() { for (const x of this.owned) x.dispose(); this.owned = []; }
 }
 
@@ -571,12 +571,12 @@ class PopView extends BaseView {
     const bd = m.board, T = 0.28, BV = 0.08;
     const shape = bd.type === 'circle' ? new THREE.Shape().absarc(0, 0, bd.R, 0, Math.PI * 2, false) : roundRectShape(bd.w, bd.d, Math.min(0.9, Math.min(bd.w, bd.d) * 0.14));
     this.top = T + 2 * BV;
-    this.scene.add(new THREE.Mesh(this.own(slab(shape, T, BV)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: m.palette.board }))));
+    this.root.add(new THREE.Mesh(this.own(slab(shape, T, BV)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: m.palette.board }))));
     this.shadow(bd.w * 1.35, bd.d * 1.35);
     const n = m.bubbles.length;
     this.domes = this.own(new THREE.InstancedMesh(SHARED.dome, SHARED.plastic, n));
     this.rims = this.own(new THREE.InstancedMesh(SHARED.rim, SHARED.plastic, n));
-    this.scene.add(this.domes, this.rims);
+    this.root.add(this.domes, this.rims);
     this.h = new Float32Array(n); this.t = new Float32Array(n).fill(-1); this.base = [];
     const c = new THREE.Color();
     m.bubbles.forEach((b, i) => {
@@ -661,7 +661,7 @@ class SandView extends BaseView {
     this.m = m;
     const [tw, td] = m.cfg.shape.tray;
     this.trayTop = 0.3;
-    this.scene.add(new THREE.Mesh(this.own(slab(roundRectShape(tw, td, 0.7), 0.2, 0.05)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: '#B98B62' }))));
+    this.root.add(new THREE.Mesh(this.own(slab(roundRectShape(tw, td, 0.7), 0.2, 0.05)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: '#B98B62' }))));
     this.shadow(tw * 1.3, td * 1.3);
     const { sideTex, topTex } = sandTextures(m.cfg.shape.layers);
     this.own(sideTex); this.own(topTex);
@@ -672,13 +672,13 @@ class SandView extends BaseView {
 
     this.lineMat = this.own(new THREE.MeshBasicMaterial({ color: COLORS.accent, transparent: true, opacity: 0.9 }));
     this.line = new THREE.Mesh(this.own(new THREE.BoxGeometry(1, 0.03, 0.06)), this.lineMat);
-    this.line.visible = false; this.scene.add(this.line);
+    this.line.visible = false; this.root.add(this.line);
 
     this.knife = new THREE.Group();
     const blade = new THREE.Mesh(this.own(new THREE.BoxGeometry(0.035, 0.9, 1.7)), SHARED.metal); blade.position.set(0, 0.2, 0);
     const handle = new THREE.Mesh(this.own(new THREE.BoxGeometry(0.16, 0.3, 0.9)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: '#F2B544' })));
     handle.position.set(0, 0.55, -1.15);
-    this.knife.add(blade, handle); this.knife.visible = false; this.scene.add(this.knife);
+    this.knife.add(blade, handle); this.knife.visible = false; this.root.add(this.knife);
     this.knifeY = this.surfaceY + 0.5;
 
     const POOL = 360;
@@ -686,7 +686,7 @@ class SandView extends BaseView {
     this.gp = new Float32Array(POOL * 3); this.gv = new Float32Array(POOL * 3); this.gl = new Float32Array(POOL); this.gNext = 0;
     const c = new THREE.Color(), mtx = new THREE.Matrix4().makeScale(0, 0, 0);
     for (let i = 0; i < POOL; i++) { c.set(m.cfg.shape.layers[i % m.cfg.shape.layers.length]); this.grains.setColorAt(i, c); this.grains.setMatrixAt(i, mtx); }
-    this.scene.add(this.grains);
+    this.root.add(this.grains);
     this.tmp = new THREE.Matrix4();
   }
   piece(p, at) {
@@ -695,13 +695,13 @@ class SandView extends BaseView {
     const mesh = new THREE.Mesh(g, this.mats);
     mesh.position.set(at[0], this.trayTop, at[1]);
     mesh.userData.wob = 0;
-    this.scene.add(mesh);
+    this.root.add(mesh);
     return mesh;
   }
   onEvent(e) {
     if (e.type !== 'cut-committed') return;
     const old = this.meshes[e.idx], from = [old.position.x, old.position.z];
-    this.scene.remove(old); old.geometry.dispose();
+    this.root.remove(old); old.geometry.dispose();
     const a = this.piece(this.m.pieces[e.idx], from), b = this.piece(this.m.pieces[e.idx + 1], from);
     a.userData.wob = b.userData.wob = 1;
     this.meshes.splice(e.idx, 1, a, b);
@@ -769,12 +769,12 @@ class FoamView extends BaseView {
     this.m = m;
     const { N, S, CELL } = FOAM, tray = S + 0.8;
     this.trayTop = 0.3;
-    this.scene.add(new THREE.Mesh(this.own(slab(roundRectShape(tray, tray, 1), 0.18, 0.06)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: '#BFE4F2' }))));
+    this.root.add(new THREE.Mesh(this.own(slab(roundRectShape(tray, tray, 1), 0.18, 0.06)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: '#BFE4F2' }))));
     this.shadow(tray * 1.3, tray * 1.3);
     const objGeo = this.own(slab(polyShape(m.poly), 0.3, 0.13, { bevelSegments: 4 }));
     this.obj = new THREE.Mesh(objGeo, this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: m.cfg.obj.color })));
     this.obj.position.y = this.trayTop;
-    this.scene.add(this.obj);
+    this.root.add(this.obj);
     this.objTop = this.trayTop + 0.3 + 0.26;
 
     const rnd = mulberry32(seed ^ 0x9e3779b9), cells = [], bx = [], bz = [], by = [], br = [];
@@ -791,13 +791,13 @@ class FoamView extends BaseView {
     this.foam = this.own(new THREE.InstancedMesh(SHARED.foam, SHARED.soap, cells.length));
     const col = new THREE.Color(), tints = ['#ffffff', '#f6f9ff', '#fff4fb', '#f2fffb'];
     cells.forEach((_, b) => { col.set(tints[b % tints.length]); this.foam.setColorAt(b, col); });
-    this.scene.add(this.foam);
+    this.root.add(this.foam);
     this.disp = Float32Array.from(m.cov);
     this.tmp = new THREE.Matrix4();
 
     const R = m.R;
     this.ring = new THREE.Mesh(this.own(new THREE.RingGeometry(R * 0.9, R, 48).rotateX(-Math.PI / 2)), this.own(new THREE.MeshBasicMaterial({ color: COLORS.accent, transparent: true, opacity: 0.55, depthTest: false })));
-    this.ring.renderOrder = 5; this.ring.visible = false; this.scene.add(this.ring);
+    this.ring.renderOrder = 5; this.ring.visible = false; this.root.add(this.ring);
     this.surfaceY = this.objTop;
     this.bounds = { w: tray, d: tray, h: 1.1 };
   }
@@ -898,58 +898,273 @@ function setRoom(e, floor, wall, top) {
   const u = e.room.material.uniforms; u.uFloor.value.set(floor); u.uWall.value.set(wall); u.uTop.value.set(top); ENV_BG.set(top);
 }
 
-// 1 · Sweep: one seamless paper sweep, tinted per toy to set off its colours. Nothing else in frame.
-const SWEEP = { pop: ['#FFE6A0', '#FFEFC4', '#FFF8E6'], sand: ['#CDE5FF', '#DDEDFF', '#F1F7FF'], foam: ['#FFD2C2', '#FFE0D5', '#FFF3EE'] };
-function buildSweep(e) {
-  e.gap = 2.2;
-  e.room = makeRoom({ Rc: 7, blend: 5, rise: 16, floor: '#FFE6A0', wall: '#FFEFC4', top: '#FFF8E6', glow: 0.35 });
-  e.place = (w, d, zc, toy) => setRoom(e, ...SWEEP[toy]);
+const UV_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+// Toybox: an open box with three compartments, one per toy. The lid shows the game's name.
+function feltTexture(hex) {
+  const s = 128, c = document.createElement('canvas'); c.width = c.height = s;
+  const g = c.getContext('2d'), rnd = mulberry32(5);
+  g.fillStyle = hex; g.fillRect(0, 0, s, s);
+  for (let k = 0; k < 2600; k++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '255,255,255' : '0,0,0'},${0.03 + rnd() * 0.05})`; g.fillRect(rnd() * s, rnd() * s, 1, 1 + rnd() * 2); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); return t;
+}
+function star(g, x, y, r, col) {
+  g.fillStyle = col; g.beginPath();
+  for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
+  g.closePath(); g.fill();
+}
+function labelTexture(text, { w = 1024, h = 256, bg = '#FFF6E8', fg = '#FF6B5B', deco = ['#FFC94A', '#7ED9C9', '#B9A3FF'] } = {}) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'), tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const draw = () => {
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = bg; g.beginPath(); g.roundRect ? g.roundRect(0, 0, w, h, h * 0.22) : g.rect(0, 0, w, h); g.fill();
+    g.fillStyle = fg; g.font = `600 ${Math.round(h * 0.58)}px Fredoka, ui-rounded, "Segoe UI", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, w / 2, h * 0.55);
+    deco.forEach((col, i) => { star(g, w * (0.07 + i * 0.012), h * (0.3 + i * 0.22), h * 0.11, col); star(g, w * (0.93 - i * 0.012), h * (0.7 - i * 0.22), h * 0.11, col); });
+    tex.needsUpdate = true;
+  };
+  draw();
+  if (document.fonts) document.fonts.load(`600 40px Fredoka`).then(draw, () => {});
+  return tex;
+}
+// A small, recognisable model of any toy configuration, about one unit across, standing on y = 0.
+function miniToy(toy, idx, ghost) {
+  const grp = new THREE.Group(), M = (col, cap) => ghost || mm(col, cap);
+  if (toy === 'pop') {
+    const cfg = POP_CONFIGS[idx], pal = POP_PAL[cfg.pal], round = cfg.family === 'Rings' || cfg.family === 'Sunflower';
+    const base = new THREE.Mesh(slab(round ? new THREE.Shape().absarc(0, 0, 0.5, 0, Math.PI * 2, false) : roundRectShape(1, 0.78, 0.14), 0.1, 0.03), M(pal.board));
+    grp.add(base);
+    const spots = round ? [[0, 0], ...Array.from({ length: 6 }, (_, i) => [Math.cos(i * 1.047) * 0.28, Math.sin(i * 1.047) * 0.28])] : Array.from({ length: 6 }, (_, i) => [(i % 3 - 1) * 0.3, (Math.floor(i / 3) - 0.5) * 0.3]);
+    spots.forEach(([x, z], i) => {
+      const dome = new THREE.Mesh(SHARED.dome, M(pal.hue ? `hsl(${Math.round(i / spots.length * 300)},78%,64%)` : pal.colors[i % pal.colors.length]));
+      dome.position.set(x, 0.16, z); dome.scale.set(0.11, 0.09, 0.11); grp.add(dome);
+    });
+  } else if (toy === 'sand') {
+    const shape = SAND_CONFIGS[idx].shape, xs = shape.poly.map(p => p[0]), sc = 1 / (Math.max(...xs) - Math.min(...xs));
+    const poly = shape.poly.map(([x, z]) => [x * sc, z * sc]);
+    shape.layers.slice(0, 3).forEach((col, i) => {
+      const layer = new THREE.Mesh(slab(polyShape(poly), 0.16, 0), M(col, MATCAP.matte)); layer.position.y = 0.32 - i * 0.16; grp.add(layer);
+    });
+  } else {
+    const obj = FOAM_CONFIGS[idx].obj, xs = obj.poly.map(p => p[0]), sc = 1 / (Math.max(...xs) - Math.min(...xs));
+    grp.add(new THREE.Mesh(slab(polyShape(obj.poly.map(([x, z]) => [x * sc, z * sc])), 0.14, 0.04), M(obj.color)));
+  }
+  return grp;
+}
+const TOY_ORDER = ['pop', 'sand', 'foam'];
+function disposeTree(o) { o.traverse(n => { if (n.geometry && n.geometry !== SHARED.dome) n.geometry.dispose(); }); }
+
+function buildToybox(e) {
+  const YB = -0.7;
+  e.tilt = [52, 62]; e.gap = 6;
+  e.room = makeRoom({ Rc: 7, blend: 5, rise: 16, floor: '#DDF0FF', wall: '#E8F5FF', top: '#F6FBFF', glow: 0.3 });
+  e.room.position.y = YB - 0.01; e.room.material.uniforms.uY0.value = YB - 0.01;
+  setRoom(e, '#DDF0FF', '#E8F5FF', '#F6FBFF');
+  const wallMat = mm('#FFF4E4'), trimMat = mm('#FF7B6B'), bodyMat = mm('#FF8C7A');
+  const felt = { center: mm('#C4EBDD', MATCAP.matte, { map: feltTexture('#FFFFFF') }), side: mm('#FFD9E6', MATCAP.matte, { map: feltTexture('#FFFFFF') }) };
+  const label = labelTexture('TOYBOX');
+  let box = null;
+  e.place = (w, d, zc, toy) => {
+    e.room.position.z = -(2 * d + 1.9) / 2 - 3;
+    const key = `${w.toFixed(2)}:${d.toFixed(2)}:${toy}:${TOY_ORDER.map(t => rounds[t] ? rounds[t].cfgIndex : 0).join()}`;
+    if (box && box.key === key) return;
+    if (box) { e.group.remove(box.grp); disposeTree(box.grp); }
+    const grp = new THREE.Group(), T = 0.45, t = 0.28, HW = 1.4, HF = 0.38, HD = 1.05;
+    const cw = 2 * w + 1.0, cd = 2 * d + 1.0, sw = Math.max(3.4, cw * 0.42), IW = 2 * sw + cw + 2 * t, OW = IW + 2 * T, OD = cd + 2 * T;
+    const block = (bw, bh, bd, x, y, z, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat); m.position.set(x, y + bh / 2, z); grp.add(m); return m; };
+    block(OW, -YB - 0.02, OD, 0, YB, 0, bodyMat);
+    const feltPlane = (fw, x, mat) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(fw, cd).rotateX(-Math.PI / 2), mat); p.position.set(x, -0.005, 0); grp.add(p); };
+    feltPlane(cw, 0, felt.center); feltPlane(sw, -(cw / 2 + t + sw / 2), felt.side); feltPlane(sw, cw / 2 + t + sw / 2, felt.side);
+    block(OW, HF - YB, T, 0, YB, OD / 2 - T / 2, wallMat);
+    block(OW, HW - YB, T, 0, YB, -OD / 2 + T / 2, wallMat);
+    for (const s of [-1, 1]) {
+      block(T, HW - YB, OD - 2 * T, s * (OW / 2 - T / 2), YB, 0, wallMat);
+      block(t, HD, cd, s * (cw / 2 + t / 2), 0, 0, wallMat);
+      block(t + 0.08, 0.1, cd, s * (cw / 2 + t / 2), HD, 0, trimMat);
+      block(T + 0.08, 0.12, OD - 2 * T, s * (OW / 2 - T / 2), HW, 0, trimMat);
+    }
+    block(OW + 0.08, 0.12, T + 0.08, 0, HF, OD / 2 - T / 2, trimMat);
+    block(OW + 0.08, 0.12, T + 0.08, 0, HW, -OD / 2 + T / 2, trimMat);
+    const hinge = new THREE.Group(); hinge.position.set(0, HW + 0.12, -OD / 2); hinge.rotation.x = -0.22;
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(OW, OD, 0.3), trimMat); lid.position.set(0, OD / 2, -0.15); hinge.add(lid);
+    const plateW = Math.min(OW * 0.55, 11), plate = new THREE.Mesh(new THREE.PlaneGeometry(plateW, plateW / 4), new THREE.MeshBasicMaterial({ map: label, transparent: true }));
+    plate.position.set(0, plateW / 8 + 0.5, 0.02); hinge.add(plate);
+    grp.add(hinge);
+    const i = TOY_ORDER.indexOf(toy), neighbours = [TOY_ORDER[(i + 2) % 3], TOY_ORDER[(i + 1) % 3]];
+    neighbours.forEach((nt, k) => {
+      const mini = miniToy(nt, rounds[nt] ? rounds[nt].cfgIndex : 0);
+      mini.scale.setScalar(Math.min(sw, cd) * 0.62);
+      mini.position.set((k ? 1 : -1) * (cw / 2 + t + sw / 2), 0, 0);
+      mini.rotation.y = (k ? -1 : 1) * 0.25;
+      grp.add(mini);
+    });
+    e.group.add(grp);
+    box = { key, grp };
+  };
+  e.extras = (w, d) => { const OD = 2 * d + 1.9; return [[0, 1.6 + 0.8, -OD / 2 - 0.4], [0, YB, OD / 2]]; };
 }
 
-// 2 · Podium: the toy displayed on a two-tier plinth shaped to its footprint, with a few large soft forms behind.
-function buildPodium(e) {
-  const Y0 = -1.3;
-  e.tilt = [46, 58]; e.floorY = Y0; e.pad = 1.0; e.gap = 6;
-  e.room = makeRoom({ Rc: 6, blend: 4, rise: 16, floor: '#FFEDE3', wall: '#FFF2EA', top: '#FFF9F5', glow: 0.3 });
-  e.room.position.y = Y0; e.room.material.uniforms.uY0.value = Y0;
-  setRoom(e, '#FFEDE3', '#FFF2EA', '#FFF9F5');
-  const topMat = mm('#FFFAF6'), baseMat = mm('#FFC6B3');
-  const arch = new THREE.Mesh(new THREE.ExtrudeGeometry(archShape(3.4, 3.9, 0.7), { depth: 0.6, bevelEnabled: true, bevelThickness: 0.08, bevelSize: 0.08, bevelSegments: 3, curveSegments: 40 }), mm('#9FDCC2'));
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(1.0, 40, 28), mm('#FFD86B'));
-  const pill = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.8, 10, 28), mm('#C9B6FF'));
-  const ballShadow = new THREE.Mesh(SHARED.plane, SHARED.shadow), pillShadow = new THREE.Mesh(SHARED.plane, SHARED.shadow);
-  e.group.add(arch, ball, pill, ballShadow, pillShadow);
-  let tiers = null;
-  e.place = (w, d) => {
-    const key = `${w.toFixed(2)}:${d.toFixed(2)}`;
-    if (!tiers || tiers.key !== key) {
-      if (tiers) { tiers.top.geometry.dispose(); tiers.base.geometry.dispose(); e.group.remove(tiers.top, tiers.base); }
-      tiers = {
-        key,
-        top: new THREE.Mesh(slab(roundRectShape(2 * w + 0.9, 2 * d + 0.9, 0.9), 0.43, 0.06), topMat),
-        base: new THREE.Mesh(slab(roundRectShape(2 * w + 2.1, 2 * d + 2.1, 1.3), 0.6, 0.07), baseMat),
-      };
-      tiers.top.position.y = -0.55; tiers.base.position.y = Y0;
-      e.group.add(tiers.top, tiers.base);
+// Collection: a 24-cubby shelf, one cubby per layout. Finishing a round puts its trophy on the shelf.
+const COLLECT_KEY = 'toybox-collected';
+function loadCollected() { try { return new Set(JSON.parse(localStorage.getItem(COLLECT_KEY) || '[]')); } catch { return new Set(); } }
+function buildShelf(e) {
+  e.tilt = [36, 48]; e.gap = 1.1;
+  e.room = makeRoom({ Rc: 0.12, blend: 0.04, rise: 10, floor: '#FBF8F4', wall: '#FFE9DC', top: '#FFF4EC', glow: 0.25 });
+  setRoom(e, '#FBF8F4', '#FFE9DC', '#FFF4EC');
+  const collected = loadCollected(), ghostMat = new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: 0.55, depthWrite: false });
+  const rowColors = { pop: '#FFE6A0', sand: '#CDE5FF', foam: '#FFD2C2' }, frameMat = mm('#FFFFFF');
+  const hiMat = new THREE.MeshBasicMaterial({ color: COLORS.accent });
+  let shelf = null;
+  const popIns = [];
+  const cellPos = (s, toy, k) => [s.x0 + (k + 0.5) * s.c, s.y0 + (2 - TOY_ORDER.indexOf(toy)) * s.c + 0.06, s.z];
+  const putItem = (s, toy, k, animate) => {
+    const key = `${toy}:${k}`, old = s.items[key];
+    if (old) { s.grp.remove(old); disposeTree(old); }
+    const have = collected.has(key), item = miniToy(toy, k, have ? null : ghostMat), [x, y, z] = cellPos(s, toy, k);
+    item.position.set(x, y, z); item.rotation.set(0.35, -0.3, 0);
+    item.userData.size = s.c * (have ? 0.66 : 0.56);
+    item.scale.setScalar(animate ? 0.001 : item.userData.size);
+    if (animate) popIns.push({ item, t: 0 });
+    s.grp.add(item); s.items[key] = item;
+  };
+  e.place = (w, d, zc, toy, cfg) => {
+    const c = Math.min(1.25, Math.max(0.85, (2 * w + 0.6) / 8));
+    const key = c.toFixed(3) + zc.toFixed(2);
+    if (!shelf || shelf.key !== key) {
+      if (shelf) { e.group.remove(shelf.grp); disposeTree(shelf.grp); }
+      const grp = new THREE.Group(), W = 8 * c, H = 3 * c, D = 0.8, t = 0.08, y0 = 0.5, z = zc + D / 2;
+      const s = { key, grp, c, x0: -W / 2, y0, z, items: {} };
+      const block = (bw, bh, bd, x, y, zz, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat); m.position.set(x, y, zz); grp.add(m); };
+      TOY_ORDER.forEach((tt, r) => block(W, c, 0.05, 0, y0 + (2 - r + 0.5) * c, zc + 0.03, new THREE.MeshBasicMaterial({ color: rowColors[tt] })));
+      for (let r = 0; r <= 3; r++) block(W + t, t, D, 0, y0 + r * c, z, frameMat);
+      for (let k = 0; k <= 8; k++) block(t, H + t, D, -W / 2 + k * c, y0 + H / 2, z, frameMat);
+      s.hi = new THREE.Group();
+      for (const [bw, bh, x, y] of [[c, 0.05, 0, c / 2], [c, 0.05, 0, -c / 2], [0.05, c, -c / 2, 0], [0.05, c, c / 2, 0]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.05), hiMat); m.position.set(x, y, 0); s.hi.add(m); }
+      grp.add(s.hi);
+      TOY_ORDER.forEach(tt => { for (let k = 0; k < 8; k++) putItem(s, tt, k, false); });
+      e.group.add(grp); shelf = s;
     }
-    const back = -(d + 2.2);
-    arch.position.set(-w * 0.55, Y0, back - 1.6);
-    ball.position.set(w * 0.55, Y0 + 1.0, back - 0.6);
-    pill.position.set(w * 0.95, Y0 + 1.4, back - 2.0); pill.rotation.z = -0.3;
-    ballShadow.position.set(ball.position.x, Y0 + 0.004, ball.position.z); ballShadow.scale.set(3, 1, 3);
-    pillShadow.position.set(pill.position.x, Y0 + 0.004, pill.position.z); pillShadow.scale.set(2.8, 1, 2);
+    const [x, y] = cellPos(shelf, toy, cfg || 0);
+    shelf.hi.position.set(x, y - 0.06 + shelf.c / 2, shelf.z + 0.42);
+  };
+  e.extras = (w, d, zc) => { const c = Math.min(1.25, Math.max(0.85, (2 * w + 0.6) / 8)); return [[-4 * c, 0.5 + 3 * c + 0.1, zc], [4 * c, 0.5 + 3 * c + 0.1, zc]]; };
+  e.onComplete = (toy, k) => {
+    const key = `${toy}:${k}`;
+    if (collected.has(key)) return;
+    collected.add(key);
+    try { localStorage.setItem(COLLECT_KEY, JSON.stringify([...collected])); } catch {}
+    if (shelf) putItem(shelf, toy, k, true);
+  };
+  e.update = (dt, t) => {
+    if (shelf) shelf.hi.scale.setScalar(reduceMotion.matches ? 1 : 1 + 0.04 * Math.sin(t * 3));
+    for (let i = popIns.length - 1; i >= 0; i--) {
+      const p = popIns[i]; p.t += dt;
+      const k = Math.min(1, p.t / 0.6);
+      p.item.scale.setScalar(p.item.userData.size * Math.max(0.001, easeOutBack(k)));
+      if (k >= 1) popIns.splice(i, 1);
+    }
   };
 }
 
-// 3 · Flat lay: shot from almost overhead on a craft cutting mat, the classic hands-on ASMR video set.
-function buildFlatlay(e) {
-  e.gap = 14; e.tilt = [70, 78];
-  e.room = makeRoom({ Rc: 1, blend: 0.1, rise: 10, floor: '#FBFAF7', wall: '#FBFAF7', top: '#FBFAF7', glow: 0.12, mat: '#86D4C4', grid: '#F2FFFB' });
-  setRoom(e, '#FBFAF7', '#FBFAF7', '#FBFAF7');
-  e.place = (w, d) => e.room.material.uniforms.uMatHalf.value.set(Math.ceil(w + 1.3), Math.ceil(d + 1.3));
+// Factory: the toy arrives on a conveyor; the machine's gauge tracks progress and its lamp turns green at the end.
+const BELT_FS = `uniform float uOffset; uniform vec3 uA, uB; varying vec2 vUv; uniform vec2 uSize;
+void main() {
+  float x = vUv.x * uSize.x - uOffset;
+  float rib = smoothstep(0.0, 0.06, abs(fract(x / 0.6) - 0.5) - 0.38);
+  vec3 c = mix(uB, uA, rib);
+  c *= 0.94 + 0.06 * smoothstep(0.0, 0.08, min(vUv.y, 1.0 - vUv.y) * uSize.y);
+  gl_FragColor = vec4(c, 1.0);
+  #include <colorspace_fragment>
+}`;
+function dialTexture() {
+  const s = 256, c = document.createElement('canvas'); c.width = c.height = s;
+  const g = c.getContext('2d'), cx = s / 2, cy = s / 2;
+  g.fillStyle = '#FFFFFF'; g.beginPath(); g.arc(cx, cy, s / 2, 0, Math.PI * 2); g.fill();
+  const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25, seg = 40;
+  for (let i = 0; i < seg; i++) {
+    const f = i / seg; g.strokeStyle = `hsl(${Math.round(8 + f * 132)},85%,62%)`; g.lineWidth = 22;
+    g.beginPath(); g.arc(cx, cy, s * 0.36, a0 + (a1 - a0) * f, a0 + (a1 - a0) * (f + 1 / seg) + 0.01); g.stroke();
+  }
+  g.strokeStyle = '#2B3050'; g.lineWidth = 4;
+  for (let i = 0; i <= 10; i++) { const a = a0 + (a1 - a0) * i / 10; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * 0.44, cy + Math.sin(a) * s * 0.44); g.lineTo(cx + Math.cos(a) * s * 0.48, cy + Math.sin(a) * s * 0.48); g.stroke(); }
+  star(g, cx, cy + s * 0.22, s * 0.07, '#FFC94A');
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function buildFactory(e) {
+  const Y0 = -1.5;
+  e.tilt = [42, 54]; e.gap = 4;
+  e.room = makeRoom({ Rc: 5, blend: 3.5, rise: 16, floor: '#F2EEFF', wall: '#E9E3FF', top: '#F7F5FF', glow: 0.3 });
+  e.room.position.y = Y0; e.room.material.uniforms.uY0.value = Y0;
+  setRoom(e, '#F2EEFF', '#E9E3FF', '#F7F5FF');
+  const beltMat = new THREE.ShaderMaterial({ vertexShader: UV_VS, fragmentShader: BELT_FS, uniforms: { uOffset: { value: 0 }, uA: { value: C('#EEF2F8') }, uB: { value: C('#D3DAE6') }, uSize: { value: new THREE.Vector2(60, 8) } } });
+  const lampMat = new THREE.MeshBasicMaterial({ color: '#FFB347' }), needleMat = mm('#2B3050');
+  let rig = null, progress = 0, shown = 0, delivery = null, done = false;
+  e.place = (w, d) => {
+    const key = `${w.toFixed(2)}:${d.toFixed(2)}`;
+    if (rig && rig.key === key) return;
+    if (rig) { e.group.remove(rig.grp); disposeTree(rig.grp); }
+    const grp = new THREE.Group(), bd = 2 * d + 1.4, L = 60;
+    const block = (bw, bh, bdp, x, y, z, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bdp), mat); m.position.set(x, y + bh / 2, z); grp.add(m); return m; };
+    block(L, -Y0 - 0.02, bd + 0.5, 0, Y0, 0, mm('#7CC6F7'));
+    const belt = new THREE.Mesh(new THREE.PlaneGeometry(L, bd).rotateX(-Math.PI / 2), beltMat); belt.position.y = -0.006; grp.add(belt);
+    beltMat.uniforms.uSize.value.set(L, bd);
+    const railMat = mm('#FFD45E');
+    for (const s of [-1, 1]) block(L, 0.24, 0.26, 0, -0.02, s * (bd / 2 + 0.13), railMat);
+    const bolts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 12).rotateX(Math.PI / 2), mm('#C9A23E', MATCAP.metal), 40), mtx = new THREE.Matrix4();
+    for (let i = 0; i < 40; i++) bolts.setMatrixAt(i, mtx.makeTranslation(-L / 2 + (i + 0.5) * L / 40, 0.11, bd / 2 + 0.27));
+    grp.add(bolts);
+    const mz = -(bd / 2 + 0.26 + 1.5), mx = -w * 0.42, MH = 4.4;
+    const body = new THREE.Mesh(slab(roundRectShape(3.6, 2.6, 0.6), MH, 0.12), mm('#8EDBC9')); body.position.set(mx, Y0, mz); grp.add(body);
+    const front = mz + 1.3 + 0.12, gy = Y0 + MH * 0.62;
+    const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 0.98, 0.18, 48).rotateX(Math.PI / 2), mm('#FFFFFF', MATCAP.metal)); bezel.position.set(mx, gy, front + 0.08); grp.add(bezel);
+    const dial = new THREE.Mesh(new THREE.CircleGeometry(0.86, 48), new THREE.MeshBasicMaterial({ map: dialTexture() })); dial.position.set(mx, gy, front + 0.18); grp.add(dial);
+    const needle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.7, 0.03).translate(0, 0.3, 0), needleMat); needle.position.set(mx, gy, front + 0.21); grp.add(needle);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 20).rotateX(Math.PI / 2), needleMat); hub.position.set(mx, gy, front + 0.22); grp.add(hub);
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.75), new THREE.MeshBasicMaterial({ map: labelTexture('TOY FACTORY', { bg: '#FFFFFF', fg: '#5B4BD6' }), transparent: true }));
+    plate.position.set(mx, Y0 + MH * 0.9, front + 0.02); grp.add(plate);
+    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.34, 28, 18), lampMat); lamp.position.set(mx + 1.2, Y0 + MH + 0.55, mz); grp.add(lamp);
+    block(0.5, 0.35, 0.5, mx + 1.2, Y0 + MH + 0.1, mz, mm('#FFFFFF'));
+    const hopper = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.45, 1.0, 36, 1, true), mm('#FFC94A', MATCAP.plastic, { side: THREE.DoubleSide })); hopper.position.set(mx - 0.4, Y0 + MH + 0.7, mz); grp.add(hopper);
+    const pipe = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
+      new THREE.Vector3(mx - 1.8, Y0 + MH * 0.5, mz), new THREE.Vector3(mx - 2.8, Y0 + MH * 0.45, mz + 0.2),
+      new THREE.Vector3(-w - 2.2, 1.6, -bd / 2 + 0.3), new THREE.Vector3(-w - 1.4, 0.9, -bd / 2 + 0.9)]), 40, 0.32, 16), mm('#FF8FB1'));
+    grp.add(pipe);
+    const crate = new THREE.Group(), cm = mm('#FFB86B');
+    for (const [bw, bh, bdp, x, y, z] of [[2.4, 0.12, 2.0, 0, 0, 0], [2.4, 1.3, 0.12, 0, 0, -0.94], [2.4, 1.3, 0.12, 0, 0, 0.94], [0.12, 1.3, 2.0, -1.14, 0, 0], [0.12, 1.3, 2.0, 1.14, 0, 0]]) {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bdp), cm); m.position.set(x, y + bh / 2, z); crate.add(m);
+    }
+    for (let i = 0; i < 3; i++) { const mini = miniToy(TOY_ORDER[i], i * 2); mini.scale.setScalar(0.85); mini.position.set(-0.6 + i * 0.6, 1.0 + (i % 2) * 0.15, (i - 1) * 0.3); mini.rotation.set(0.4, i, 0.2); crate.add(mini); }
+    crate.position.set(w * 0.62, Y0, mz + 0.4); grp.add(crate);
+    e.group.add(grp);
+    rig = { key, grp, needle, lamp };
+  };
+  e.extras = (w, d) => { const bd = 2 * d + 1.4, mz = -(bd / 2 + 0.26 + 1.5); return [[-w * 0.42, Y0 + 4.4 * 0.62 + 1.0, mz + 1.4], [w * 0.62, Y0 + 1.6, mz]]; };
+  e.onProgress = (f) => { progress = f; };
+  e.onComplete = () => { done = true; };
+  e.onShow = (round) => {
+    done = round.state !== 'playing';
+    if (reduceMotion.matches) return;
+    delivery = { root: round.view.root, start: performance.now(), from: -(round.view.bounds.w + 8) };
+    e.busy = true;
+  };
+  e.update = (dt, t) => {
+    if (!rig) return;
+    shown += (progress - shown) * Math.min(1, dt * 6);
+    rig.needle.rotation.z = 2.36 - shown * 4.72;
+    lampMat.color.set(done ? '#4CD97B' : '#FFB347');
+    rig.lamp.scale.setScalar(done && !reduceMotion.matches ? 1 + 0.12 * Math.sin(t * 6) : 1);
+    if (delivery) {
+      const k = Math.min(1, (performance.now() - delivery.start) / 900), x = delivery.from * (1 - easeInOut(k)), yaw = e.group.rotation.y;
+      const prev = delivery.x ?? delivery.from;
+      delivery.root.position.set(x * Math.cos(yaw), 0, -x * Math.sin(yaw));
+      beltMat.uniforms.uOffset.value += x - prev; delivery.x = x;
+      if (k >= 1) { delivery.root.position.set(0, 0, 0); delivery = null; e.busy = false; }
+    }
+  };
 }
 
-const ENVS = { sweep: buildSweep, podium: buildPodium, flatlay: buildFlatlay };
+const ENVS = { toybox: buildToybox, shelf: buildShelf, factory: buildFactory };
+
 function makeEnv(id) {
   const e = { group: new THREE.Group(), place() {}, update() {}, gap: 2 };
   ENVS[id](e);
@@ -959,7 +1174,7 @@ function makeEnv(id) {
     const w = (yaw ? b.d : b.w) / 2, d = (yaw ? b.w : b.d) / 2, zc = -(d + e.gap);
     e.room.position.z = zc;
     e.room.material.uniforms.uRot.value.set(Math.cos(yaw), Math.sin(yaw));
-    e.place(w, d, zc, current);
+    e.place(w, d, zc, current, rounds[current] ? rounds[current].cfgIndex : 0);
   };
   return e;
 }
@@ -1067,7 +1282,7 @@ new MutationObserver(readTheme).observe(document.documentElement, { attributes: 
 
 const rounds = {};
 let current = 'pop', roundCounter = 0, activePointer = null, chipTimer = 0, brushEnergy = 0;
-let env = null, envId = 'sweep', lastFit = null;
+let env = null, envId = 'toybox', lastFit = null;
 const envCache = {};
 
 function newRound(id, cfgIndex) {
@@ -1088,6 +1303,12 @@ function fitCamera(b) {
   const corners = [];
   const pad = (env && env.pad) || 0, y0 = (env && env.floorY) || 0;
   for (const x of [-b.w / 2 - pad, b.w / 2 + pad]) for (const z of [-b.d / 2 - pad, b.d / 2 + pad]) for (const y of [y0, b.h]) corners.push([x, y, z]);
+  if (env && env.extras) {
+    const lw = (yaw ? b.d : b.w) / 2, ld = (yaw ? b.w : b.d) / 2, zc = -(ld + env.gap), c = Math.cos(yaw), s = Math.sin(yaw);
+    for (const [x, y, z] of env.extras(lw, ld, zc)) corners.push([x * c + z * s, y, -x * s + z * c]);
+    const ax = [0, 1, 2].map(i => [Math.min(...corners.map(p => p[i])), Math.max(...corners.map(p => p[i]))]);
+    target.set((ax[0][0] + ax[0][1]) / 2, ax[1][0] + (ax[1][1] - ax[1][0]) * 0.3, (ax[2][0] + ax[2][1]) / 2);
+  }
   let lo = 2, hi = 150;
   for (let it = 0; it < 30; it++) {
     const mid = (lo + hi) / 2;
@@ -1105,7 +1326,8 @@ function attachEnv() {
 }
 function selectEnv(id) {
   envId = id;
-  if (env) env.group.removeFromParent();
+  if (env) { env.group.removeFromParent(); env.busy = false; }
+  for (const t of TOY_ORDER) if (rounds[t]) rounds[t].view.root.position.set(0, 0, 0);
   env = envCache[id] || (envCache[id] = makeEnv(id));
   paintMatcaps(LIGHTS[id]);
   if (rounds[current]) showToy();
@@ -1134,12 +1356,14 @@ function updateHUD() {
   $('config-text').textContent = def.configs[r.cfgIndex].label;
   $('bar-fill').style.width = `${Math.min(100, frac * 100).toFixed(1)}%`;
   $('bar').setAttribute('aria-valuenow', Math.round(frac * 100));
+  if (env && env.onProgress) env.onProgress(frac);
 }
 
 function showToy() {
   const r = rounds[current];
   attachEnv();
   fitCamera(r.view.bounds);
+  if (env && env.onShow) env.onShow(r);
   for (const t of document.querySelectorAll('.tab')) t.setAttribute('aria-selected', String(t.dataset.toy === current));
   stage.setAttribute('aria-labelledby', `tab-${current}`);
   setChip(TOYS[current].hint(r.domain));
@@ -1168,6 +1392,7 @@ function handle(events) {
   if (events.length) updateHUD();
   if (r.state === 'playing' && TOYS[current].domain.isComplete(r.domain)) {
     r.state = 'completing'; r.t = 0;
+    if (env && env.onComplete) env.onComplete(current, r.cfgIndex);
     cancelGesture();
     Sound.chime();
   }
@@ -1192,7 +1417,7 @@ function cancelGesture() {
 }
 canvas.addEventListener('pointerdown', (e) => {
   Sound.unlock();
-  if (activePointer !== null || rounds[current].state !== 'playing') return;
+  if (activePointer !== null || rounds[current].state !== 'playing' || (env && env.busy)) return;
   const p = toModel(e); if (!p) return;
   activePointer = e.pointerId;
   canvas.setPointerCapture(e.pointerId);
@@ -1240,9 +1465,9 @@ new ResizeObserver(() => {
 
 /* boot */
 for (const b of document.querySelectorAll('.env')) b.addEventListener('click', () => selectEnv(b.dataset.env));
-let savedEnv = 'sweep';
-try { savedEnv = localStorage.getItem('toybox-env') || 'sweep'; } catch {}
-selectEnv(ENVS[savedEnv] ? savedEnv : 'sweep');
+let savedEnv = 'toybox';
+try { savedEnv = localStorage.getItem('toybox-env') || 'toybox'; } catch {}
+selectEnv(ENVS[savedEnv] ? savedEnv : 'toybox');
 const feasible = sandFeasibility();
 newRound('sand', 0); newRound('foam', 0);
 newRound('pop', 0);
