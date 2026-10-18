@@ -1,0 +1,292 @@
+ASMR Satisfying Toybox AI Build Specification
+Version 1.3 — graphics left unspecified — 18 October 2026
+
+PURPOSE AND STATUS
+Build a small, responsive HTML5 sensory game intended for YouTube Playables through the user's selected publishing route. This is a proposed specification, not an implemented game or evidence of commercial performance. The three-toy scope and progression below resolve previously unspecified details as build defaults. Preserve the user's existing monetization decisions; do not silently replace them. No implementation, publishing or account changes have been performed by this specification.
+
+PLAYER PROMISE
+Touch an object and immediately receive a convincing visual and sound response. Finish a short activity, admire the result, replay or select another toy. The game is relaxing and self-paced: no loss condition, lives, countdown pressure or required numerical score. Progress indicates what remains to be manipulated; it does not judge speed or artistic quality. Visual design and rendering technology are intentionally unspecified.
+
+V1 PRODUCT SCOPE
+Implement three genuinely different interaction families:
+1. Pop Board: press or sweep across a board to depress bubbles.
+2. Sand Slice: drag a knife to make player-positioned cuts through a sand block.
+3. Foam Reveal: wipe foam away from a hidden object.
+The toybox exposes all three base toys from the beginning. A first visit opens Pop Board directly with a brief animated finger cue; the toybox button is always available. Subsequent launches resume the last saved activity. Switching toys preserves each toy's in-progress round. Reset affects the selected round only and never earns progression or advances ad eligibility. No banner ads, accounts, payments, backend or external analytics. Squishy physics and other toys belong to a later extension, not v1.
+
+PLAYER FLOW AND SCREENS
+Boot: host initialization -> load and validate save -> restore/create round -> render -> report host readiness at the appropriate stage. Essential input may begin as soon as readiness requirements are met; no decorative loading delay or start menu.
+Play: interactive toy, progress indicator, toybox control, reset control and essential contextual instruction. Host-controlled pause/audio must be respected; do not duplicate them in the YouTube build. Preview mode may expose its own clearly separated controls.
+Complete: let the final manipulation and payoff animation finish. Freeze the domain result, commit its completion once, then show Replay, Next and Toybox. Replay recreates the same configuration; its round ID is new. Next chooses a different accessible configuration. A later legitimate completion of Replay counts, but resetting or reopening the result cannot count.
+Toybox: three large cards with live/static previews, understandable labels and optional favourite pin. Preserve current rounds. A locked variation card explains its normal unlock requirement; an optional special-material offer clearly discloses the rewarded ad.
+No continuous timer or automatic progression forces the player out of a toy. Once a completion is reached, the player chooses the next action.
+
+STACK AND BOUNDARIES
+Use a standards-compliant HTML5 runtime and semantic controls, with host-compatible audio. Reuse the user's current Games framework and canonical host/save/ad/lifecycle helpers if available; inspect repository instructions and existing implementations before adding modules. For this MediaCube target, inherit the direct official YouTube adapter contracts identified in the upstream addendum below; do not ship Playgama Bridge or its configuration. Shared framework primitives can be reused without imposing a different host SDK. Do not bootstrap over an existing workspace or invent an incompatible second SDK wrapper.
+
+Organize the source conceptually as:
+src/app: boot, app state transitions, screen navigation, composition
+src/core: input mapping, fixed-step clock, seed RNG, events, pause ownership
+src/toys: registry and separate pop-board, sand-slice, foam-reveal modules
+src/presentation: displays read-only domain state through the implementation chosen by the builder
+src/audio: sound synthesis/samples, voice limits, host mute integration
+src/content: authored shape catalogue, seeded configuration, history scheduler
+src/progression: unique completion reducer, variation unlocks, favourites
+src/persistence: schema validation, migration, serialized save queue
+src/monetization: shared ad eligibility and rewarded access orchestration
+src/platform: preview and selected production-host adapters
+src/ui: toybox, completion panel, accessible controls, localized strings
+tests: domain fixtures and material host/lifecycle integration checks
+
+DEPENDENCY DIRECTION
+UI/input -> application commands -> toy domain model -> domain events.
+Renderer and audio consume snapshots/events. Progression and monetization consume committed application events. Domain code never calls presentation, audio, storage, platform SDK or advertising APIs. Rendering never decides whether a round is complete or a reward has been earned. One shared application owns the frame loop; toys must not create independent animation loops or global event listeners.
+
+TOY MODULE CONTRACT
+Use an interface equivalent to:
+
+type ToyId = 'pop-board' | 'sand-slice' | 'foam-reveal';
+type Action =
+  | {type:'down'; pointerId:number; x:number; y:number}
+  | {type:'move'; pointerId:number; x:number; y:number}
+  | {type:'up'; pointerId:number; x:number; y:number}
+  | {type:'cancel'; pointerId:number};
+
+interface ToyModule<Config, Model, Snapshot> {
+  readonly id: ToyId;
+  readonly modelVersion: number;
+  create(config: Config, seed: number): Model;
+  restore(snapshot: Snapshot, config: Config): Model;
+  dispatch(model: Model, action: Action): DomainEvent[];
+  step(model: Model, fixedDeltaSeconds: number): DomainEvent[];
+  progress(model: Model): {done:number; total:number};
+  isComplete(model: Model): boolean;
+  serialize(model: Model): Snapshot;
+}
+
+Renderers are separate per toy and receive read-only model views. Domain events include bubble-popped, cut-committed, foam-cleared and round-completed. Every committed event carries roundId plus a monotonic event sequence for deduplication. App controller generates a completion event exactly once per round. Reset/replay creates a new roundId; round configuration ID and round instance ID are different concepts.
+
+COORDINATES AND INPUT
+Use Pointer Events for touch, mouse and pen. Convert pointer coordinates through the current play-surface transform into the coordinates used by the toy model. Capture the active pointer. Use one active manipulating pointer in v1; ignore extra contacts without changing state. Interpolate the swept path between input samples so fast motion cannot skip targets. Cancel the active gesture on pointercancel, lost capture, navigation, pause or resize. Already committed manipulations remain. An unfinished sand-cut preview is discarded. Never commit a partially drawn cut because a finger leaves the browser.
+
+TOY 1 — POP BOARD
+Model: configuration-defined bubble positions/radii and a bitset of depressed bubbles. Presentation effects are separate from whether a bubble has been popped. Hit detection uses circle-versus-swept-segment intersection, constrained to the board. Each bubble transitions from raised to depressed once per round and emits one pop event. Repeated contact cannot award extra progress. Progress = depressed count / total count; completion requires every bubble.
+Variation: four authored arrangements with different paths/densities (rectangular grid, concentric rings, spiral, animal silhouette), each with two genuinely different target layouts. Eight layout configurations total; colour palettes are cosmetic and do not multiply that count. Provide the first layout per arrangement initially; unlock its second layout after three completed rounds in that arrangement. Small bubble clusters must remain accurately selectable on the smallest supported screen.
+
+TOY 2 — SAND SLICE
+Model: cuttable sand, separated pieces and accepted cuts, represented independently of presentation. The builder chooses the model and rendering approach. Preview the proposed cut during the gesture. On pointer-up, accept only a cut that passes through an eligible piece, follows the allowed cutting direction and leaves fragments above a documented minimum size. Invalid or too-short gestures give a clear harmless response and earn no progress. A committed cut must preserve a consistent amount of material and be reproducible from the saved state.
+Player can choose cut placement and spacing within the valid region. Each round requires six valid cuts. Progress = accepted cuts / six. Completion occurs once six valid cuts exist. Configure minimum fragment size and starting dimensions so six cuts remain feasible; validate this for the actual catalogue. Include four authored starting shapes and two permitted cutting directions per shape, eight configurations. First direction starts accessible; second unlocks after three completed rounds on that shape. Presentation variations are not additional mechanics. Save the durable pieces and accepted cuts, excluding transient effects. Cut validity and boundary tolerances must be stable across update rates.
+
+TOY 3 — FOAM REVEAL
+Model: an object boundary and a bounded authoritative record of remaining foam coverage. Clear foam along the swept brush path. Only coverage belonging to the object counts toward completion. Progress is cleared relevant coverage / initial relevant coverage. At 97% cleared coverage, commit completion and clear the remaining relevant foam as the payoff; do not demand isolated imperceptible remnants. Save a compact representation of the coverage. What the player sees must agree with the domain state. Brush reach is relative to object size and must remain consistent across viewport changes.
+Variation: four authored object silhouettes and two distinct starting foam-coverage layouts per object, eight configurations. First coverage layout per object starts accessible; second unlocks after three completed rounds on that object. Revealed object colours do not count as additional content. Core brushing works with sound muted. Do not add a second hidden-object reward that requires another ad to view a result the player already earned.
+
+CONTENT AND PROGRESSION
+V1 contains 24 authored configurations across three mechanics: eight per toy. This is a proposed catalogue count, not 24 proven unique retention experiences. Confirm that configurations feel different in actual play. Store definitions in data, not ad-hoc conditional logic. Never claim seed count or palette combinations as level count. Use a local persistent seed plus per-toy recent configuration history to choose Next without immediate repetition when at least two configurations are accessible. When the accessible catalogue is exhausted, reshuffle while avoiding a boundary repeat. Replay explicitly overrides that avoidance.
+Completion increments the matching configuration-family counter and may unlock the related alternate configuration. Ordinary progression is never dependent on an ad. Do not add coins, shop currencies, timers, competitive scoring or daily hard limits. The daily tray is a deterministic rotation of already accessible configurations based on the host-approved date source, falling back to device date in preview. It grants no time-sensitive economic reward, never deletes access and does not require a server. It must still work when the device clock changes. Provide enough accessible meaningful manipulation for an eight-minute session; demonstrate the actual experience rather than declaring the duration from configuration arithmetic.
+
+APPLICATION STATES AND LIFECYCLE
+Main states: BOOT, LOADING_SAVE, PLAYING, COMPLETING, RESULT, TOYBOX, AD_PENDING, AD_SHOWING, RECOVERABLE_ERROR. Pausing is an orthogonal set of owners, e.g. host, advertisement, hidden-preview and user-preview. Gameplay runs only when that set is empty and main state permits interaction. A host resume cannot remove an active ad pause. Production host rules own visibility/pause behavior; avoid conflicting browser handlers. Reset clock accumulators on resume to prevent a large catch-up simulation step. Cancel gestures and silence toy audio before a full-screen ad. Navigation/retry is disabled or serialized while an ad request is in flight.
+
+PERSISTENCE CONTRACT
+Save schema includes: schemaVersion, contentVersion, playerSeed, rngState, lastToyId, favourites, per-family completion counts, unlocked configuration IDs, per-toy recent history, per-toy current round (roundId/configId/modelVersion/snapshot/completionCommitted), compact rewarded-access state and supported pending-claim data. Persist semantic state; exclude transient presentation state, frame timestamps, audio objects and SDK instances. Treat ad cooldowns as active-session counters, not device wall-clock time. Do not persist a monotonic browser timestamp across restarts.
+Load before first write. Validate against explicit bounds, migrate supported old schemas and preserve unsupported newer saves without overwriting them. Save through a serialized queue; coalesce high-frequency mutations, flush after a short idle window, after completion, on navigation and before any ad request. Bound dirty progress loss and document the host's actual durability behavior. If a pre-ad save fails, preserve current play and suppress that ad attempt. No silent fallback from failed production cloud saving into a separate local save. The production archive may enter off-platform preview only when the real official SDK explicitly reports IN_PLAYABLES_ENV === false; a missing or broken SDK is an error. A separate development-only standalone preview may omit the SDK, but must never be packaged as the production upload. Full reload restores all three saved activities without recutting, repopping or reclearing completed work.
+
+ADVERTISING CONTRACT
+Use only the selected host's supported advertising interface and the canonical project adapter. YouTube owns pre-roll delivery; do not issue a manual startup ad. Never use AdMob inside the Playables build. Monetization is one central service, not logic embedded separately in each toy.
+User-approved round cadence: interstitial eligibility after every two completed rounds, including the first opportunity. Retain the existing active-time minimums:
+  firstInterstitialCompletedRounds = 2
+  subsequentInterstitialCompletedRounds = 2
+  minimumActiveSessionSecondsBeforeFirst = 120
+  minimumActiveSecondsBetweenFullScreenAttempts = 120
+All relevant conditions must be met together. Only active PLAYING time counts, excluding pause, menus, result screens and ads. Only legitimate unique round completions count. Menu switching, resetting, rapidly clicking Next or reopening a result cannot advance eligibility. The first in-game round is ad-free; this cannot control host pre-rolls.
+Trigger opportunity only after the completion payoff, when the player chooses Next/Replay/Toybox from a completed round. Navigating away from an unfinished endless interaction never earns a forced ad simply because time passed. Once eligible, persist first, then attempt one interstitial. Record an attempt even if no ad is served, resetting the cooldown and consuming that pending opportunity, so failed requests cannot prompt a loop. Subsequent opportunity needs two fresh completed rounds and 120 fresh active seconds. Do not retry automatically. Document the selected host's stricter pacing constraints if any.
+Rewarded offer: one special material for the player's next round, presented explicitly as optional. Show the exact material and scope before opt-in. It is not a permanent unlock and is never required for ordinary progression. Give one unconsumed bonus-round entitlement on verified successful reward completion; consume it atomically when that round starts. Cancellation, error or no fill grants nothing and returns to usable play. Do not stack entitlements through repeated taps. A rewarded attempt suppresses the nearby interstitial and resets full-screen pacing; a successful reward consumes the pending interstitial opportunity. Failed/cancelled rewarded attempts also get the cooldown so the player is not immediately shown another full-screen offer.
+Use stable host reward-type IDs and separate local unique claim IDs. Persist claim intent before the call; grant only from the host's confirmed success result and record claim+entitlement atomically in one save snapshot. Use an in-flight lock to prevent duplicates. If the host offers durable reward receipt recovery, reconcile it on reload. Otherwise document the crash window between host success and durable saving; never claim guaranteed exactly-once delivery across crashes without supporting receipts, and never infer reward success from a pending intent. Retain unsaved verified success in memory and retry saving without showing another ad.
+The two-round cadence was explicitly approved by the user on 18 October 2026. Active-time minimums remain the previously proposed defaults. This is not a measured revenue optimum. No changes to these rules during implementation without user approval.
+
+AUDIO AND FEEL
+Play sounds from accepted domain events, never from generic pointer movement. Pop variation can depend on bubble size; slicing sound follows valid knife contact; foam produces a soft brushing texture while coverage is actually clearing. Limit overlapping voices and stop sustained audio on pointer end/cancel, pause and navigation. Start/unlock audio only after a permitted gesture; respect host mute state at all times. Mute cannot affect progress or mechanics. Respect reduced-motion preferences without changing gameplay outcomes.
+
+PERFORMANCE AND DISPLAY TARGETS
+ZIP and expanded runtime must each remain below 5,000,000 bytes; work toward 4 MB. No remote game-asset downloads. Proposed measurable goals: responsive input feedback within 100 ms at p95 on the chosen physical low-end test device, no unbounded resource growth during a 15-minute mixed-toy session, and cold first interaction within five seconds on a documented mobile/network condition. Measure host SDK time separately from game bytes and initialization. These are acceptance targets, not results.
+Keep required controls usable in portrait, landscape, square and ultrawide layouts, including safe areas and tiny embeds. Provide accessible control labels and focus visibility. If keyboard gameplay is claimed, implement and test actual toy keyboard actions; accessible menus alone do not establish gameplay accessibility. These are functional usability checks, not a prescribed visual design.
+
+BUILD SEQUENCE
+1. Inspect current framework and repository instructions. Write brief, architecture, decisions and planned QA using current project documentation conventions. Record all design defaults above.
+2. Build shell, input transform, host adapter, pause ownership and save lifecycle. Prove one real Pop Board round end to end: play, complete, save, reload, reset and Next.
+3. Add remaining Pop Board configurations and progression. Verify that fast swipes and resize do not change correctness.
+4. Add Foam Reveal using the same shell and lifecycle; then Sand Slice with deterministic polygon fixtures and feasibility checks.
+5. Add toybox navigation, three independent current rounds, catalogue history, daily tray and favourites.
+6. Integrate interaction audio and reduced-motion handling. Integrate central ads with a deterministic fake host before real host validation.
+7. Run meaningful mechanic, persistence, reward and lifecycle checks; inspect actual screens and play on physical devices. Profile size/startup/input responsiveness; fix failures. Package the exact tested build with source/docs and evidence. Keep local completion separate from external submission/publication.
+
+REQUIRED ACCEPTANCE EVIDENCE
+- Same seed, configuration and semantic inputs produce the same durable toy state.
+- Swept input cannot skip bubbles or foam; repeated contact never duplicates progress.
+- Sand cuts are valid, preserve material within tolerance and allow six cuts for every catalogue entry; cancel never commits a cut.
+- Foam progress uses only relevant coverage and finishes at the defined threshold.
+- Each round completion updates progression once; returning from a menu cannot duplicate it.
+- All three activities survive switching, resize, pause and supported save/reload.
+- Slow/failed/unsupported-newer save never causes an overwrite or silent production fallback.
+- All ad timing thresholds, no-fill, cancellation, duplicate callbacks/taps and rewarded suppression use the same central logic.
+- Host pause/mute dominates toy logic; no stuck audio or stale input after interruption.
+- All 24 configurations exist, all unlocks are reachable, and no claimed variation is merely a seed/palette multiplication.
+- Actual first-playable, dense-play, completion and toybox layouts are inspected on required sizes. Browser-only checks cannot substitute for physical-device evidence.
+- Report file sizes and measured performance conditions. Do not fabricate passed tests or call a stub locally complete.
+
+OFFICIAL HOST REFERENCES
+YouTube advertising model: https://developers.google.com/youtube/gaming/playables/reference/monetization
+YouTube SDK: https://developers.google.com/youtube/gaming/playables/reference/sdk
+Recheck current selected-host requirements at implementation/release. MediaCube commercial shares and game traffic are separate business inputs, not constants inside the engine.
+
+MEDIACUBE UPSTREAM ARCHITECTURE AND TEST ADDENDUM
+
+Authority and reference identity
+Reference repository: https://github.com/lrodeveloperr/Haircut
+Repository main inspected at: ed50f09c8b3fed4dda3c5a4f7ab0fc6f9006520c
+Reference upload: releases/asmr-barber-fade-master-v3.101-mediacube-youtube.zip
+Reference SHA-256: 3a482e55e6317ad34260938daa65642c8b68367447f02fbfbaaf907e582558e0
+Reference measured bytes: ZIP 410921; expanded 1089471; 14 files.
+The exact local reference ZIP matches this recorded SHA-256. These are Barber measurements, not Toybox size results. The reference's own record calls it a CI-verified candidate, with actual McPlay/YouTube-host and physical-device checks still pending. Its validation does not certify Toybox.
+
+Architecture and executable test sources read:
+- mediacube/README.md and mediacube/BUILD-v3.101.json
+- source/youtube/client.js, loader.js, package.py and cache URL/build integration
+- qa/youtube-contracts.cjs, youtube-browser.cjs, youtube-cache-urls.py and quality checks
+- .github/workflows/youtube-release.yml
+The inspected local adapter, loader, builder, packager and QA files have Git blob IDs matching the pinned remote tree. Reuse their behavior, not Barber's save keys, haircut DOM selectors, bundles, licensing assumptions or commercial settings. Toybox needs its own namespace and data validators. Do not modify or rebuild the Barber game as part of implementing this specification.
+
+Primary requirements rechecked 18 October 2026:
+https://developers.google.com/youtube/gaming/playables/certification/requirements_integration
+https://developers.google.com/youtube/gaming/playables/certification/requirements_stability
+https://developers.google.com/youtube/gaming/playables/reference/sdk
+https://developers.google.com/youtube/gaming/playables/reference/test_suite_guide
+The main body and this addendum form one contract. User-approved game and ad decisions take precedence over reference-game settings. This addendum makes host details explicit; it does not replace the toy mechanics.
+
+U1 Direct host adapter
+Production index.html loads https://www.youtube.com/game_api/v1 as its first script, without async/defer, before game/bootstrap scripts. Never reassign global ytgame, package a substitute SDK, or treat SDK absence as preview. Register onPause, onResume and onAudioEnabledChange before awaiting asynchronous initialization so early events cannot be lost. Initialize audio from isAudioEnabled. Use getLanguage as the locale source, including BCP-47 fallback mapping; never persist a locale override in the cloud save or infer it from navigator.language. Localize essential instructions, reward disclosures and recovery messages for every declared locale. Textless mechanics do not remove those obligations.
+
+U2 Genuine readiness and simple startup
+Display an actual visible loading status before firstFrameReady. Call it once, before gameReady. Start the single shared loadData request and independent locale request concurrently when not host-paused. Apply saved toy state, progression and input mapping before the first playable draw. Remove the loading overlay, complete a real paint checkpoint with the play surface visible and controls usable, then call gameReady once. No arbitrary wait, hidden overlay or fake readiness to improve timing. An initial zero-sized embedded viewport is a valid temporary condition: wait/reflow without writing a new default save or failing permanently. Defer engine work and new host reads while the host is paused. Startup diagnostic stage names, build identity and safe short error codes are available locally; do not expose save payloads or collect external telemetry.
+Do not put optional derived-asset cache reads or loading snapshots on the critical startup path. Keep progression saves separate from derived caches; cache failure must never clear progress or block play.
+
+U3 Protected bounded cloud saves
+Use one versioned Toybox envelope through loadData/saveData in hosted mode. Introduce stable Toybox slot/field names, contentVersion and per-toy modelVersion; do not import Barber data. Share exactly one initial load Promise across consumers. Normalize documented/test-host empty results (empty string, whitespace, null/undefined, empty object/array, and the baseline's empty scalar representations false/0) into a new canonical Toybox envelope. Nonempty malformed, unknown or future-schema data enters recoverable error without writes/deletions. Decode strings once; validate already-decoded objects without double parsing. Missing optional known fields can get safe defaults only after the envelope is recognized. Preserve unrelated unknown fields during a supported migration.
+Each write merges current dirty changes in a serialized queue. Resolve save promises only after SDK acknowledgement, retain failed updates for retry, and deep-copy values at the API boundary. Store a totalCompletedRounds nonnegative safe-integer counter in the same logical completion transaction as the completed-round marker; never count an unacknowledged partial reset as saved progress. Debounce input checkpoints at approximately 220 ms, flush on meaningful milestones, before ads, and during the host's documented final-save opportunity. Ordinary new network/game work stops during host pause; only the permitted final-save operation runs there.
+Target serialized UTF-8 cloud payload below 64 KiB for all normal Toybox states so the best-effort final-save window can carry it. The normal transport hard bound remains below 3 MiB; validate bytes rather than JavaScript string length. Use compact representations for bubble/foam state and bounded durable sand-cut state. Keep completion deduplication compact (current-round committed marker/sequence), not an ever-growing list of all historic round IDs. Explicitly bound recent history, piece data, path samples, input strokes and pending claims. Reject overflow rather than creating a save that a subsequent load cannot decode. Any codec must be lossless, versioned, dependency-free and bounded against expansion bombs, duplicate paths, invalid counts and unsafe keys. A new reader supports its shipped old versions; an old reader protects unsupported new saves.
+
+U4 Host execution and recovery
+Distinguish gameplayPaused from executionPaused. Opening Toybox pauses manipulation while the menu remains usable; a host pause makes the whole game inert, freezes toy/UI timers and animation scheduling, cancels active gestures and silences every audio path. Only host resume releases the host pause owner. An ad Promise resolving or a menu closing cannot resume a still-paused host. Defer score calls and new nonessential network work while paused. On resume reset time bookkeeping, read current viewport dimensions and redraw without needing a new touch. Dispose callbacks, timers, audio nodes and outstanding paint waits exactly once.
+The direct YouTube upload must not install Page Visibility, BroadcastChannel or multiple-tab pause ownership. Keep development-preview-only lifecycle helpers out of the production bundle. On startup/load failure provide a short localized explanation and keyboard-focused Retry that preserves saved data. Missing SDK stays an SDK error. A future save tells the player to use a newer version. Retry reconstructs the client cleanly rather than registering duplicate listeners.
+Choose recovery tests that apply to the implementation actually used. Preserve domain state through display interruption or reinitialization. Do not copy Barber-specific implementation checks into Toybox without establishing applicability, and do not mark an inapplicable check as passed.
+
+U5 Advertising and honest reporting
+Carry over Barber's save-before-ad, in-flight lock, strict rewarded-result handling, host-pause ownership and failed-ad recovery. Only requestRewardedAd resolving to boolean true grants the defined bonus material; false, undefined, rejection, no fill and a failed pre-ad save grant nothing. Interstitial acceptance is not proof of a displayed impression. Never inflate impression counters or revenue from SDK request counts. Use the Toybox pacing already approved: two completed rounds for the first and each subsequent opportunity, with the retained 120 active-second conditions and rewarded suppression. Do not copy Barber's 60-second game pacing or rewarded replay/daily-wardrobe offers. Toybox Replay remains free.
+Ad availability is conditional; core play always remains usable without an ad. Hide/disable rewarded offers in real-SDK off-platform preview. Local test fixtures can simulate earned/cancelled/error results only in the runner, never inside the upload ZIP. If a promise resolves before host resume, wait for host resume before restoring interaction.
+
+U6 Progress metric and McPlay score checks
+sendScore is optional under the current Google integration requirements. Default product remains free of competitive score UI. If the selected McPlay validation route requires a score call, use the existing totalCompletedRounds as one consistent progress dimension; this changes no toy mechanics or win criteria. Report a positive safe integer only from the exact cloud-acknowledged snapshot, after readiness and when host execution permits. Never send a synthetic zero just to make a validator green. Restored positive progress can sync once after readiness. A failed or pending report cannot block saving, input, ads or readiness; retry at a later save/resume without a tight loop. Declare this metric in portal answers if enabled. If McPlay requests a different metric, stop and resolve it against the actual product rather than fabricate a score.
+
+U7 Stale asset prevention and reproducible packaging
+All bundled runtime references use relative paths. Give each local startup JS/CSS/asset URL an actual content digest (filename hash or validated digest query), preserving any required entry parameters. Changing bytes must change the reference; unversioned runtime references fail the studio cache gate. Validate references transitively, including module imports, dynamic imports, CSS URLs, worker scripts and runtime-loaded assets, not just the HTML entry. Do not cache the official SDK as a local replacement, and do not add a service worker for host assets. Test a stale-browser-cache return across two builds: no mixed old/new modules, no vanished state and no looping retry screen.
+Production has index.html at the archive root, safe alphanumeric/underscore/hyphen/dot filenames, no path traversal/symlinks/absolute runtime references, no extra platform configuration, no credentials/test fixtures/QA captures/source maps carrying private material, and complete applicable notices/license texts. Enforce the studio's stricter ZIP and expanded-byte limits below 5,000,000. Keep the reference's 15,000,000-byte per-file advisory gate as a named publisher/studio check, not an assertion of Google's current initial-bundle hard limit. Google currently specifies individual files below 30 MiB, recommends below 512 KiB, and limits total file count to 8000; the stricter total studio cap will dominate most size checks.
+Produce deterministic ZIP entries with sorted paths and fixed timestamps/permissions. Never overwrite an immutable versioned release. Rebuild and compare the complete ZIP byte-for-byte, then extract that exact release and point all release acceptance tests at the extracted bytes. Record source commit, ZIP SHA-256, ZIP/expanded/largest-file sizes and runtime-file hashes. A development server test is insufficient release evidence. Package size does not include SDK/network/pre-roll latency; measure stage timings honestly.
+
+UPSTREAM TEST MATRIX
+All following cases are required test specifications with initial status NOT RUN for Toybox. Their names are not evidence of passing tests. Implement executable cases against Toybox; the Barber harness cannot run unchanged because its objects, save keys and selectors differ. Use the existing reference test runner patterns and deterministic clocks/fault injection rather than production bypass flags. Static checks complement behavioral assertions; string matches alone cannot prove lifecycle or save correctness.
+
+BOOT01 | Missing/blocked SDK | Production archive shows SDK recovery and writes nothing; it never creates a local fake ytgame.
+BOOT02 | Script order | Exact archive has blocking official SDK first; all game scripts execute afterward; ytgame is never overwritten.
+BOOT03 | Readiness | Visible loading -> one firstFrameReady -> loaded/restored visible interactive toy -> one gameReady, with loading removed.
+BOOT04 | Startup concurrency | Locale and exactly one cloud read overlap; all host callbacks exist before either resolves.
+BOOT05 | Initial host pause | No new host reads, engine steps, UI timers or ready advancement until resume; one clean startup follows.
+BOOT06 | Zero-sized viewport | Temporary 0x0 -> phone dimensions reaches play without resetting or overwriting progress.
+BOOT07 | Recovery retry | Failed cloud read -> Retry -> successful read restores the original round with no duplicate listeners.
+BOOT08 | Denied optional storage | Hosted progress never touches local storage/IndexedDB; unavailable derived caches cannot block readiness.
+BOOT09 | Locale | Host fr-CA/es-419/RTL locales map to shipped translations; navigator and saved locale cannot override the host; reward notices remain readable.
+
+SAVE01 | Initial load lock | Save/delete before successful load reject without an SDK write; concurrent consumers share one read.
+SAVE02 | Empty accounts | Test every enumerated empty representation; each creates a canonical save and restores it after reload.
+SAVE03 | Decode forms | Serialized and already-decoded supported envelopes restore identical state; no double JSON parsing.
+SAVE04 | Protected data | Malformed JSON, nonempty unknown shape, newer envelope and newer per-toy model all preserve raw cloud data and block writes.
+SAVE05 | Migration | Each actually shipped older Toybox schema migrates with toy state, unlocks and unknown preserved fields intact; no invented Barber migration.
+SAVE06 | Concurrent changes | Interleaved toy/progression/reward writes merge; delayed acknowledgement does not lose another update.
+SAVE07 | Acknowledgement | Save Promise stays pending until saveData resolves; failure preserves dirty state and later retry saves it.
+SAVE08 | Snapshot isolation | Mutating caller values or returned values cannot mutate queued/enveloped saves.
+SAVE09 | Exact manipulation | In each of the three toys, manipulate with native pointer events, await acknowledged save, reload, and compare exact domain state/config/round ID.
+SAVE10 | Size and bounds | Normal maximum legitimate state is below 65536 UTF-8 bytes; reject 3 MiB transport overflow locally and bound every history/grid/polygon field.
+SAVE11 | Codec defense | If packing is implemented: exact fractional/bitset round-trip, malformed lengths, duplicate/unsafe paths, depth overflow and expansion-bomb cases cannot write damaged data.
+SAVE12 | Final-save window | Dirty active manipulation flushes in the permitted host pause window without new unrelated network requests or rendering.
+
+LIFE01 | Full host pause | Native pointer/keyboard actions, requestAnimationFrame work, toy effects, UI timers, audio and non-save network all freeze.
+LIFE02 | Resume | No elapsed-time jump; current viewport reflows; manipulation continues once; no duplicate timers.
+LIFE03 | Menu ownership | Toybox pauses the toy but stays interactive; closing it cannot clear a simultaneous host/ad pause.
+LIFE04 | Audio authority | Initial host mute and later mute events silence every sound path; game preferences/finished ads never override them.
+LIFE05 | Gesture interruption | Pointer cancel/lost capture/host pause/resize cannot commit an unfinished cut, leave a stuck brush or repeat a pop.
+LIFE06 | Disposal | Repeated destroy/retry returns callback, timer, presentation-resource and audio-resource counts to baseline and rejects pending paint waits cleanly.
+LIFE07 | Production ownership | Extracted upload contains no Page Visibility/BroadcastChannel pause owner; host callbacks alone control YouTube execution pause.
+
+ADS01 | First two rounds | At 120 active seconds and two real completions, transition can request one interstitial; four rounds are not required.
+ADS02 | Threshold boundaries | 1 round + 120s and 2 rounds +119.999s do not request; 2 rounds +120s permit; menu/result/paused time cannot contribute.
+ADS03 | Subsequent cadence | Two fresh completions and 120 fresh active seconds after the previous attempt are both required; resets and reopenings never count.
+ADS04 | Natural break | No call during pointer manipulation or completion payoff; only the specified completed-round transition triggers it.
+ADS05 | Save-before-ad | Failed/pending pre-ad save cannot call SDK advertising; failed save returns to usable play with progress intact.
+ADS06 | Strict reward | true grants one bonus entitlement; false/undefined/error/no fill grant zero and do not corrupt progression.
+ADS07 | Concurrent input | Double taps and delayed duplicate callbacks create one in-flight request and at most one entitlement per local claim.
+ADS08 | Pause ordering | Ad resolution before host resume does not restart input, audio, rendering or timers.
+ADS09 | Suppression | Rewarded attempt applies the specified cooldown and suppresses the nearby interstitial; no immediate second full-screen prompt.
+ADS10 | Honest request result | Accepted interstitial increments attempt pacing only, never fabricated displayed-impression counts; failed requests cannot produce an automatic retry loop.
+ADS11 | Entitlement durability | Confirmed reward, save, reload and next-round consumption grant one exact special material; cancellation/reload cannot mint a reward from pending intent.
+ADS12 | Core availability | No-fill/unsupported ads leave all ordinary toys, free replay and progression usable; preview has no working rewarded CTA.
+
+METRIC01 | Optional score setting | Disabled mode makes no sendScore call; configured McPlay mode uses only totalCompletedRounds.
+METRIC02 | Exact acknowledged snapshot | With two delayed saves, each reported value matches its acknowledged snapshot; unsaved or failed progress is never reported.
+METRIC03 | Restore and types | Positive restored count syncs after ready; empty account sends no dummy zero; fractions/negative/unsafe/non-numeric values are rejected.
+METRIC04 | Independence | Delayed/failed sendScore cannot block ready, later saves or play; retry is event-driven and deferred through host pause.
+
+PACK01 | Exact artifact identity | Rebuild produces the same ZIP bytes; extracted upload SHA matches every test report and the release manifest.
+PACK02 | Archive structure | Root index exists; file count/path/symlink/license/ZIP/expanded/largest-file rules pass; no fixtures, Bridge or production mock are shipped.
+PACK03 | Resource closure | Network capture and static dependency traversal find only bundled relative assets and the official SDK; no external analytics, ads or game assets.
+PACK04 | Hash mutation | Every local runtime reference matches its bytes; mutate each payload in memory and prove the old reference is invalid; reject a missing digest.
+PACK05 | Cached update | Serve version A, retain browser cache, upgrade to B; saved progress restores and all requested modules belong to B without a mixed-version failure.
+PACK06 | Host CSP | Run the exact upload under the current published YouTube response-header CSP; assert no CSP violations/unapproved connections. Keep CSP text in a versioned QA fixture with its source/check date.
+PACK07 | Real SDK | Separate case uses the real official SDK under host CSP and its actual off-platform mode; no injected SDK fixture in this case.
+PACK08 | Preview separation | Official-SDK nonhosted preview performs no cloud/ad calls; denied browser storage uses in-memory preview without overwriting an unread disk save if storage later recovers. Standalone preview is a separate build and cannot pass as the upload.
+
+PLAY01 | Native domain flow | Native input completes each toy, commits once, reaches Next/Replay/Toybox and preserves the other two active rounds.
+PLAY02 | Reachability | All 24 authored configurations, ordinary unlocks and no-immediate-repeat rules are reachable; no configuration needs an unavailable advertisement.
+PLAY03 | Layout | All 27 reference viewports below cover each toy, toybox, reward offer, result and recovery; required controls are visible, clickable and unclipped with no page scroll.
+PLAY04 | Cross-browser | Chromium, Firefox and WebKit exercise native play/save/reload, pause/mute, rewards and recovery on the exact ZIP; desktop Edge smoke and actual Android/iOS YouTube runs are separate recorded cases.
+PLAY05 | Soak | At least 50 completed-round transitions and at least ten active minutes (both conditions), switching across all toys; no uncaught errors, stuck pause/input or unbounded callback/DOM/audio/heap growth. Retain the main body's 15-minute performance session as additional profiling if needed.
+PLAY06 | Cold and warm startup | Record first-frame/loaded-save/first-playable/ready timings with network, CPU, browser and device conditions; SDK time separate; no optional cache wait or false readiness.
+PLAY07 | Display recovery | Interrupt/reinitialize the chosen display implementation and restore the same durable toy state without progress loss; implementation-specific cases require an applicability reason.
+PLAY08 | Real device interaction | Physical Android and iOS: native touch/cancel/rotation, audio activation, host mute/pause, reload and return after eviction; emulator results are not labelled physical evidence.
+
+HOST01 | McPlay pre-flight | Upload exact hashed ZIP only when authorized; retain platform result and resolve every failure/warning with evidence.
+HOST02 | Hosted functional pass | Hosted save/reload, mute/pause, earned/cancelled/unavailable reward, natural two-round interstitial and selected progress metric tested through the actual provided review route.
+HOST03 | Evidence boundaries | Test fixtures are labelled simulations. CI/local pass, McPlay pre-flight pass, physical-device pass, publisher approval and YouTube publication are separate statuses. An inaccessible host test remains pending, never passed.
+
+Reference layout coverage (CSS pixels)
+225x400, 320x568, 360x640, 375x667, 390x844, 412x915, 430x932,
+568x320, 640x360, 844x390, 932x430, 717x512, 768x1024, 820x1180,
+1024x1366, 1024x768, 1180x820, 1366x1024, 1280x720, 1366x768,
+1440x900, 1920x1080, 2560x1440, 3440x1440, 400x400, 480x270, 270x480.
+Retain extra extreme-aspect checks required by the current studio framework. Match behavior and required hit regions rather than importing Barber-specific widget positions. Escape remains available to the host; do not globally intercept it to implement a menu shortcut.
+
+Required executable suite deliverables at implementation time
+- qa/toybox-domain: deterministic toy mechanics, completion, catalogue and round scheduling.
+- qa/youtube-contracts: shared adapter with controlled clock, delayed/failing load/save/ad/score functions, host callbacks and known fixtures.
+- qa/youtube-browser: real native UI input against extracted production bytes, three browser engines, startup/recovery/layout/soak modes.
+- qa/package-contracts: archive validation, recursive references, content-digest mutation and exact reproducibility.
+- qa/results: machine-readable case ID, status, engine/device, build SHA, artifact SHA, timestamp, source fixture and evidence path. Never commit player save contents.
+Give every matrix case an executable test reference or a named hosted/device manual procedure with evidence. Explicit NOT RUN/FAIL/N/A/PASS values prevent empty successful test runs from looking complete. An N/A needs a technical reason. Require nonzero collected tests, expected suite selection, zero failures, no unhandled rejection/page error and no missing required suite. Test-only SDK objects belong in runner injection or excluded QA modules, never the upload runtime. Domain tests must not bypass native interaction in the browser integration cases.
+
+Release gate order
+1. Build, package, hash, extract; verify reproducible exact bytes and asset closure.
+2. Execute Toybox domain and direct-SDK contracts against that extraction.
+3. Execute Chromium/Firefox/WebKit functional, CSP, recovery and native save/reload tests.
+4. Execute required viewport and soak cases, then physical Android/iOS cases and measured startup/size budgets.
+5. Assemble evidence and listing/QA answers from the actual code. Local checks passing marks a local candidate only.
+6. With upload authorization, run actual McPlay pre-flight and hosted tests for that same SHA; certification remains pending until the platform confirms it.
+If GitHub CI already has evidence for an identical ZIP and relevant environment, reuse it; do not spend runner time repeating unchanged implementation/layout suites without a reason. A Toybox release cannot reuse Barber gameplay passes as its own. No upload/publication is authorized by this documentation-only update.
