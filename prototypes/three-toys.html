@@ -70,10 +70,8 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .progress { flex: 1; min-width: 0; display: grid; gap: 8px; }
 .bar { height: 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .18s ease-out; }
-.dots { display: flex; gap: 7px; }
-.dots i { width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; border: 1.5px solid var(--muted); opacity: .55; }
-.dots i.done { background: var(--muted); }
-.dots i.on { background: var(--accent); border-color: var(--accent); opacity: 1; }
+.explored { height: 5px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.explored i { display: block; height: 100%; width: 0; background: var(--muted); border-radius: 999px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes pop { from { transform: scale(.2); } to { transform: scale(1); } }
@@ -124,7 +122,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 <footer class="bottom">
   <div class="progress">
     <div class="bar" role="progressbar" aria-label="Round progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar"><i id="bar-fill"></i></div>
-    <div class="dots" id="dots" aria-hidden="true"></div>
+    <div class="explored" aria-hidden="true"><i id="explored-fill"></i></div>
   </div>
   <div class="row">
     <button class="icon-btn" id="reset" aria-label="Reset"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
@@ -188,71 +186,275 @@ function clipHalf(poly, m, n, sign) {
 }
 const cross2 = (a, b) => a[0] * b[1] - a[1] * b[0];
 
-/* ───────────── domain: Pop Board ───────────── */
-function popFinish(bubbles, board) {
+/* ───────────── catalogue: silhouettes built from simple parts (no three.js) ───────────── */
+// A silhouette is a list of coloured polygons; its area is their union. "lift" stacks detail parts on top.
+const TAU = Math.PI * 2;
+const rot2 = (pts, x, z, a) => pts.map(([px, pz]) => [x + px * Math.cos(a) - pz * Math.sin(a), z + px * Math.sin(a) + pz * Math.cos(a)]);
+const circlePts = (x, z, r, n = 36) => Array.from({ length: n }, (_, i) => [x + Math.cos(i / n * TAU) * r, z + Math.sin(i / n * TAU) * r]);
+const ellipsePts = (x, z, rx, rz, a = 0, n = 40) => rot2(Array.from({ length: n }, (_, i) => [Math.cos(i / n * TAU) * rx, Math.sin(i / n * TAU) * rz]), x, z, a);
+function rrectPts(x, z, w, d, rad = 0.2, a = 0) {
+  rad = Math.max(0.02, Math.min(rad, w / 2 - 0.01, d / 2 - 0.01));
+  const pts = [], hw = w / 2 - rad, hd = d / 2 - rad;
+  for (const [cx, cz, a0] of [[hw, hd, 0], [-hw, hd, Math.PI / 2], [-hw, -hd, Math.PI], [hw, -hd, Math.PI * 1.5]])
+    for (let i = 0; i <= 4; i++) { const t = a0 + i / 4 * Math.PI / 2; pts.push([cx + Math.cos(t) * rad, cz + Math.sin(t) * rad]); }
+  return rot2(pts, x, z, a);
+}
+const starPts = (x, z, ro, ri, n = 5, a = -Math.PI / 2) => Array.from({ length: n * 2 }, (_, i) => { const t = a + i * Math.PI / n, r = i % 2 ? ri : ro; return [x + Math.cos(t) * r, z + Math.sin(t) * r]; });
+const polarPts = (fn, n = 96) => Array.from({ length: n }, (_, i) => { const t = i / n * TAU, r = fn(t); return [Math.cos(t) * r, Math.sin(t) * r]; });
+const heartPts = (s = 0.17, n = 64) => Array.from({ length: n }, (_, i) => { const t = i / n * TAU; return [16 * Math.sin(t) ** 3 * s, -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * s]; });
+const halfEllipsePts = (x, z, rx, rz, up = true, n = 32) => Array.from({ length: n + 1 }, (_, i) => { const t = Math.PI * i / n; return [x + Math.cos(t) * rx, z + (up ? -1 : 1) * Math.sin(t) * rz]; });
+function crescentPts(R = 2.4, r = 2.05, dx = 1.1, n = 40) {
+  const ix = (R * R - r * r + dx * dx) / (2 * dx), iy = Math.sqrt(Math.max(0, R * R - ix * ix));
+  const a = Math.atan2(iy, ix), b = Math.atan2(iy, ix - dx), pts = [];
+  for (let i = 0; i <= n; i++) { const t = a + (TAU - 2 * a) * i / n; pts.push([Math.cos(t) * R, Math.sin(t) * R]); }
+  for (let i = 1; i < n; i++) { const t = (TAU - b) - (TAU - 2 * b) * i / n; pts.push([dx + Math.cos(t) * r, Math.sin(t) * r]); }
+  return pts;
+}
+const part = (poly, col, lift = 0) => { const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]); return { poly, col, lift, bb: [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)] }; };
+const pc = (x, z, r, col, lift) => part(circlePts(x, z, r), col, lift);
+const pe = (x, z, rx, rz, a, col, lift) => part(ellipsePts(x, z, rx, rz, a), col, lift);
+const pr = (x, z, w, d, rad, a, col, lift) => part(rrectPts(x, z, w, d, rad, a), col, lift);
+const pp = (pts, col, lift) => part(pts, col, lift);
+function partsBox(parts) {
+  return parts.reduce((b, p) => [Math.min(b[0], p.bb[0]), Math.min(b[1], p.bb[1]), Math.max(b[2], p.bb[2]), Math.max(b[3], p.bb[3])], [Infinity, Infinity, -Infinity, -Infinity]);
+}
+// Centre a silhouette and scale its longest side to `size`.
+function normalise(parts, size) {
+  const [x0, z0, x1, z1] = partsBox(parts), s = size / Math.max(x1 - x0, z1 - z0), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+  return parts.map(p => part(p.poly.map(([x, z]) => [(x - cx) * s, (z - cz) * s]), p.col, p.lift));
+}
+const insideParts = (parts, x, z) => parts.some(p => x >= p.bb[0] && x <= p.bb[2] && z >= p.bb[1] && z <= p.bb[3] && pointInPoly(x, z, p.poly));
+
+// Outline of any inside-test as one polygon: sample a grid, optionally grow it, trace the boundary, simplify.
+function outlineOf(inside, box, h = 0.07, grow = 0) {
+  const pad = grow + 2 * h, x0 = box[0] - pad, z0 = box[1] - pad, nx = Math.ceil((box[2] - box[0] + 2 * pad) / h) + 1, nz = Math.ceil((box[3] - box[1] + 2 * pad) / h) + 1;
+  let g = new Uint8Array(nx * nz);
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) g[j * nx + i] = inside(x0 + i * h, z0 + j * h) ? 1 : 0;
+  if (grow > 0) {
+    const r = Math.ceil(grow / h), out = new Uint8Array(nx * nz), offs = [];
+    for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) if (di * di + dj * dj <= r * r) offs.push([di, dj]);
+    for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+      if (!g[j * nx + i]) continue;
+      for (const [di, dj] of offs) { const a = i + di, b = j + dj; if (a >= 0 && b >= 0 && a < nx && b < nz) out[b * nx + a] = 1; }
+    }
+    g = out;
+  }
+  for (let i = 0; i < nx; i++) { g[i] = 0; g[(nz - 1) * nx + i] = 0; }
+  for (let j = 0; j < nz; j++) { g[j * nx] = 0; g[j * nx + nx - 1] = 0; }
+  // Marching squares: edges keyed by midpoint; chain into loops.
+  const at = (i, j) => g[j * nx + i], next = new Map(), key = (a, b) => `${a},${b}`;
+  const E = { t: (i, j) => [2 * i + 1, 2 * j], b: (i, j) => [2 * i + 1, 2 * j + 2], l: (i, j) => [2 * i, 2 * j + 1], r: (i, j) => [2 * i + 2, 2 * j + 1] };
+  const seg = (p, q) => next.set(key(...p), q);
+  for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const c = at(i, j) * 8 + at(i + 1, j) * 4 + at(i + 1, j + 1) * 2 + at(i, j + 1);
+    const T = E.t(i, j), B = E.b(i, j), L = E.l(i, j), R = E.r(i, j);
+    switch (c) {
+      case 1: seg(B, L); break; case 2: seg(R, B); break; case 3: seg(R, L); break; case 4: seg(T, R); break;
+      case 5: seg(T, L); seg(B, R); break; case 6: seg(T, B); break; case 7: seg(T, L); break; case 8: seg(L, T); break;
+      case 9: seg(B, T); break; case 10: seg(L, B); seg(R, T); break; case 11: seg(R, T); break; case 12: seg(L, R); break;
+      case 13: seg(B, R); break; case 14: seg(L, B); break;
+    }
+  }
+  let best = [];
+  const seen = new Set();
+  for (const k0 of next.keys()) {
+    if (seen.has(k0)) continue;
+    const loop = []; let k = k0;
+    while (k && !seen.has(k)) { seen.add(k); const [a, b] = k.split(',').map(Number); loop.push([x0 + a * h / 2, z0 + b * h / 2]); const q = next.get(k); k = q && key(...q); }
+    if (loop.length > best.length) best = loop;
+  }
+  return simplify(best, h * 0.45);
+}
+function simplify(pts, eps) {
+  if (pts.length < 8) return pts;
+  const rdp = (a, b) => {
+    let idx = -1, dmax = 0;
+    for (let i = a + 1; i < b; i++) { const d = segDist(pts[i][0], pts[i][1], pts[a][0], pts[a][1], pts[b][0], pts[b][1])[0]; if (d > dmax) { dmax = d; idx = i; } }
+    return dmax > eps ? [...rdp(a, idx).slice(0, -1), ...rdp(idx, b)] : [pts[a], pts[b]];
+  };
+  const half = Math.floor(pts.length / 2);
+  return [...rdp(0, half).slice(0, -1), ...rdp(half, pts.length - 1).slice(0, -1)];
+}
+
+const K = { Y: '#FFD23F', LY: '#FFE680', OR: '#FF8A3D', RD: '#FF4D5E', PK: '#FF5C8A', LP: '#FF8FC7', BL: '#4D96FF', SK: '#5AC8FA', GR: '#6BCB77', LG: '#9BE08F', PU: '#9B5DE5', TL: '#2EC4B6', BR: '#C68B59', CR: '#FFE3B3', DK: '#26294A', WH: '#FFFFFF', GL: '#BDE7FF', GD: '#FFC531' };
+// Forty hidden toys. Coordinates: x to the right, z towards the viewer (so "up" is negative z).
+const TOY_DEFS = {
+  duck: () => [pe(-0.2, 0.5, 2.0, 1.25, 0, K.Y), pc(1.1, -1.0, 1.0, K.Y), pp([[-1.9, 0], [-2.9, -0.9], [-1.3, -0.4]], K.Y), pe(2.15, -0.85, 0.6, 0.26, 0.1, K.OR, 1), pe(-0.3, 0.55, 1.0, 0.55, 0.25, K.LY, 1), pc(1.35, -1.25, 0.16, K.DK, 2)],
+  car: () => [pr(0, 0.35, 5.0, 1.4, 0.5, 0, K.RD), pr(-0.25, -0.75, 2.9, 1.3, 0.55, 0, K.RD), pc(-1.55, 1.05, 0.68, K.DK, 1), pc(1.55, 1.05, 0.68, K.DK, 1), pc(-1.55, 1.05, 0.28, '#C9CED8', 2), pc(1.55, 1.05, 0.28, '#C9CED8', 2), pr(-0.95, -0.75, 1.05, 0.8, 0.15, 0, K.GL, 1), pr(0.45, -0.75, 1.05, 0.8, 0.15, 0, K.GL, 1), pc(2.3, 0.25, 0.22, '#FFE066', 1)],
+  rocket: () => [pe(0, 0, 0.95, 2.3, 0, K.SK), pp([[-0.85, -1.4], [0.85, -1.4], [0, -3.1]], K.RD, 1), pp([[-0.8, 0.9], [-1.9, 2.3], [-0.7, 2.0]], K.RD), pp([[0.8, 0.9], [1.9, 2.3], [0.7, 2.0]], K.RD), pp([[-0.45, 2.2], [0.45, 2.2], [0, 3.2]], K.OR), pc(0, -0.4, 0.5, K.WH, 1), pc(0, -0.4, 0.32, '#7FD1FF', 2)],
+  teddy: () => [pc(0, 0.3, 2.0, K.BR), pc(-1.55, -1.35, 0.72, K.BR), pc(1.55, -1.35, 0.72, K.BR), pc(-1.55, -1.35, 0.38, K.CR, 1), pc(1.55, -1.35, 0.38, K.CR, 1), pe(0, 0.95, 0.95, 0.72, 0, K.CR, 1), pe(0, 0.65, 0.36, 0.26, 0, K.DK, 2), pc(-0.72, -0.2, 0.18, K.DK, 1), pc(0.72, -0.2, 0.18, K.DK, 1)],
+  fish: () => [pe(0.4, 0, 2.2, 1.35, 0, K.SK), pp([[-1.5, 0], [-2.9, -1.35], [-2.5, 0], [-2.9, 1.35]], K.SK), pp([[0, -1.2], [0.9, -2.0], [1.2, -1.0]], K.SK), pe(0.3, 0, 0.32, 1.25, 0, K.Y, 1), pc(1.65, -0.3, 0.3, K.WH, 1), pc(1.7, -0.3, 0.15, K.DK, 2)],
+  star: () => [pp(starPts(0, 0, 2.8, 1.2), K.GD), pp(starPts(0, 0.05, 1.7, 0.75), '#FFE066', 1)],
+  heart: () => [pp(heartPts(), K.PK), pe(-0.9, -0.9, 0.5, 0.32, -0.6, '#FFB3C9', 1)],
+  gem: () => [pp([[-2.6, -0.8], [-1.5, -2.0], [1.5, -2.0], [2.6, -0.8], [0, 2.6]], K.PU), pp([[-1.5, -0.8], [1.5, -0.8], [0, 2.2]], '#C5A8FF', 1), pp([[-1.4, -1.85], [1.4, -1.85], [1.0, -0.95], [-1.0, -0.95]], '#B794FF', 1)],
+  dino: () => [pe(0, 0.4, 1.9, 1.1, 0, K.GR), pe(1.55, -1.05, 0.55, 1.25, -0.45, K.GR), pe(2.25, -2.05, 0.95, 0.55, 0, K.GR), pp([[-1.6, 0], [-3.4, 1.2], [-1.3, 1.1]], K.GR), pr(-0.8, 1.55, 0.65, 1.0, 0.25, 0, K.GR), pr(0.8, 1.55, 0.65, 1.0, 0.25, 0, K.GR), pp([[-1.0, -0.55], [-0.6, -1.2], [-0.2, -0.6]], K.Y, 1), pp([[0, -0.65], [0.4, -1.3], [0.8, -0.7]], K.Y, 1), pc(2.5, -2.15, 0.12, K.DK, 1)],
+  robot: () => [pr(0, -1.5, 2.6, 1.7, 0.35, 0, K.TL), pr(0, 0.85, 3.0, 2.5, 0.4, 0, K.TL), pr(-2.0, 0.75, 0.65, 1.9, 0.3, 0, K.TL), pr(2.0, 0.75, 0.65, 1.9, 0.3, 0, K.TL), pr(0, -2.6, 0.2, 0.7, 0.05, 0, '#9AA3BE'), pc(0, -3.0, 0.3, K.RD, 1), pc(-0.6, -1.55, 0.34, K.WH, 1), pc(0.6, -1.55, 0.34, K.WH, 1), pc(-0.6, -1.55, 0.16, K.DK, 2), pc(0.6, -1.55, 0.16, K.DK, 2), pr(0, 0.8, 1.5, 0.9, 0.15, 0, K.Y, 1)],
+  house: () => [pr(0, 0.7, 3.8, 2.6, 0.12, 0, K.OR), pp([[-2.4, -0.5], [2.4, -0.5], [0, -2.6]], K.RD), pr(1.1, -1.7, 0.55, 1.0, 0.08, 0, K.RD), pr(0, 1.4, 0.9, 1.2, 0.3, 0, '#8B5A3C', 1), pr(-1.05, 0.35, 0.85, 0.85, 0.12, 0, K.GL, 1)],
+  boat: () => [pp([[-2.8, 0.3], [2.8, 0.3], [1.9, 1.5], [-1.9, 1.5]], K.RD), pr(0, -1.1, 0.22, 2.9, 0.05, 0, K.BR), pp([[0.15, -2.5], [0.15, 0.1], [2.1, 0.1]], K.Y), pp([[-0.15, -2.2], [-0.15, 0.1], [-1.6, 0.1]], K.SK), pr(0, 0.9, 4.2, 0.25, 0.1, 0, K.WH, 1)],
+  icecream: () => [pp([[-1.3, 0], [1.3, 0], [0, 3.2]], '#F4B860'), pc(0, -0.8, 1.45, K.LP), pc(-0.8, -1.6, 0.9, '#7FE0C0'), pc(0.85, -1.7, 0.85, '#FFE066'), pc(0.1, -2.6, 0.38, K.RD, 1)],
+  cupcake: () => [pp([[-1.6, 0], [1.6, 0], [1.15, 2.0], [-1.15, 2.0]], K.SK), pe(0, -0.4, 1.9, 0.9, 0, K.LP), pc(-0.6, -1.1, 0.8, K.LP), pc(0.6, -1.2, 0.85, K.LP), pc(0, -1.9, 0.4, K.RD, 1), pr(-0.6, 1.0, 0.18, 1.8, 0.05, 0.15, '#9FDDFC', 1), pr(0.6, 1.0, 0.18, 1.8, 0.05, -0.15, '#9FDDFC', 1)],
+  mushroom: () => [pp(halfEllipsePts(0, -0.2, 2.5, 1.9), K.RD), pr(0, 1.0, 1.5, 2.2, 0.45, 0, K.CR), pc(-1.2, -0.8, 0.35, K.WH, 1), pc(0.2, -1.3, 0.42, K.WH, 1), pc(1.3, -0.6, 0.3, K.WH, 1)],
+  apple: () => [pc(-0.75, 0.35, 1.65, K.RD), pc(0.75, 0.35, 1.65, K.RD), pr(0, -1.55, 0.28, 1.0, 0.1, 0.15, '#8B5A3C'), pe(0.75, -1.75, 0.65, 0.3, -0.5, K.GR), pe(-0.8, -0.1, 0.35, 0.6, 0.4, '#FF8F9C', 1)],
+  balloon: () => [pe(0, -0.5, 1.8, 2.2, 0, K.PK), pp([[-0.35, 1.85], [0.35, 1.85], [0, 1.45]], K.PK), pr(0, 2.6, 0.14, 1.3, 0.05, 0, '#9AA3BE'), pe(-0.7, -1.2, 0.35, 0.6, 0.5, '#FFB3C9', 1)],
+  sun: () => [...Array.from({ length: 8 }, (_, k) => { const a = k / 8 * TAU; return pp([[Math.cos(a - 0.24) * 1.5, Math.sin(a - 0.24) * 1.5], [Math.cos(a) * 2.8, Math.sin(a) * 2.8], [Math.cos(a + 0.24) * 1.5, Math.sin(a + 0.24) * 1.5]], '#FFB703'); }), pc(0, 0, 1.8, K.Y), pc(-0.6, -0.3, 0.16, K.DK, 1), pc(0.6, -0.3, 0.16, K.DK, 1), pe(0, 0.5, 0.6, 0.22, 0, K.OR, 1)],
+  moon: () => [pp(crescentPts(), K.GD), pc(-1.25, -0.45, 0.15, K.DK, 1), pe(-1.6, 0.4, 0.3, 0.18, 0, '#FFB3C9', 1)],
+  cloud: () => [pc(-1.6, 0.4, 1.1, '#7FD1FF'), pc(-0.4, -0.4, 1.5, '#7FD1FF'), pc(1.1, -0.1, 1.3, '#7FD1FF'), pc(2.0, 0.6, 0.9, '#7FD1FF'), pr(0.1, 0.8, 4.0, 1.2, 0.6, 0, '#7FD1FF'), pc(-0.6, 0.2, 0.15, K.DK, 1), pc(0.6, 0.2, 0.15, K.DK, 1)],
+  flower: () => [...Array.from({ length: 6 }, (_, k) => pc(Math.cos(k / 6 * TAU) * 1.45, Math.sin(k / 6 * TAU) * 1.45, 0.95, K.LP)), pc(0, 0, 0.95, K.Y, 1)],
+  butterfly: () => [pe(-1.3, -0.7, 1.4, 1.1, -0.4, K.PU), pe(1.3, -0.7, 1.4, 1.1, 0.4, K.PU), pe(-1.0, 1.0, 1.0, 0.8, 0.5, K.PU), pe(1.0, 1.0, 1.0, 0.8, -0.5, K.PU), pe(0, 0, 0.3, 1.8, 0, K.DK, 1), pc(-1.4, -0.8, 0.45, K.Y, 1), pc(1.4, -0.8, 0.45, K.Y, 1), pc(-1.0, 1.0, 0.3, K.LP, 1), pc(1.0, 1.0, 0.3, K.LP, 1)],
+  cat: () => [pc(0, 0.4, 2.0, '#FFA94D'), pp([[-1.9, -0.4], [-1.6, -2.5], [-0.5, -1.5]], '#FFA94D'), pp([[1.9, -0.4], [1.6, -2.5], [0.5, -1.5]], '#FFA94D'), pp([[-1.55, -0.85], [-1.4, -1.95], [-0.85, -1.4]], '#FFD3B0', 1), pp([[1.55, -0.85], [1.4, -1.95], [0.85, -1.4]], '#FFD3B0', 1), pe(-0.75, 0, 0.22, 0.32, 0, K.DK, 1), pe(0.75, 0, 0.22, 0.32, 0, K.DK, 1), pp([[-0.22, 0.55], [0.22, 0.55], [0, 0.8]], K.PK, 1)],
+  bunny: () => [pc(0, 0.9, 1.65, '#FFB4D9'), pe(-0.7, -1.5, 0.52, 1.45, -0.15, '#FFB4D9'), pe(0.7, -1.5, 0.52, 1.45, 0.15, '#FFB4D9'), pe(-0.7, -1.5, 0.25, 1.0, -0.15, K.LP, 1), pe(0.7, -1.5, 0.25, 1.0, 0.15, K.LP, 1), pc(-0.6, 0.7, 0.16, K.DK, 1), pc(0.6, 0.7, 0.16, K.DK, 1), pe(0, 1.2, 0.25, 0.18, 0, K.PK, 1)],
+  whale: () => [pe(0, 0, 2.6, 1.45, 0, K.BL), pp([[-2.2, 0], [-3.4, -1.2], [-2.9, 0], [-3.4, 1.0]], K.BL), pe(0.3, 0.75, 1.8, 0.55, 0, '#9CC9FF', 1), pc(1.5, -0.2, 0.17, K.DK, 1)],
+  turtle: () => [pe(0, 0, 2.0, 1.55, 0, K.GR), pc(2.35, 0, 0.65, K.LG), pe(-1.2, -1.4, 0.5, 0.4, 0, K.LG), pe(1.2, -1.4, 0.5, 0.4, 0, K.LG), pe(-1.2, 1.4, 0.5, 0.4, 0, K.LG), pe(1.2, 1.4, 0.5, 0.4, 0, K.LG), pc(0, 0, 0.7, '#4FAF5A', 1), pc(-1.05, -0.6, 0.42, '#4FAF5A', 1), pc(1.05, -0.6, 0.42, '#4FAF5A', 1), pc(-1.05, 0.6, 0.42, '#4FAF5A', 1), pc(1.05, 0.6, 0.42, '#4FAF5A', 1)],
+  crown: () => [pp([[-2.6, 1.0], [2.6, 1.0], [2.6, -1.6], [1.3, -0.3], [0, -2.0], [-1.3, -0.3], [-2.6, -1.6]], K.GD), pr(0, 0.75, 5.2, 0.4, 0.1, 0, '#FFE066', 1), pc(0, 0.2, 0.35, K.RD, 1), pc(-1.5, 0.2, 0.28, K.SK, 1), pc(1.5, 0.2, 0.28, K.GR, 1)],
+  guitar: () => [pc(0, 1.1, 1.45, '#FF9F43'), pc(0, -0.4, 1.1, '#FF9F43'), pr(0, -2.3, 0.5, 2.6, 0.1, 0, '#8B5A3C'), pr(0, -3.75, 0.9, 0.75, 0.15, 0, '#8B5A3C'), pc(0, 0.55, 0.42, '#5A3A22', 1), pr(0, 1.75, 1.1, 0.2, 0.05, 0, '#5A3A22', 1)],
+  umbrella: () => [pp(halfEllipsePts(0, 0, 2.8, 1.9), K.RD), pr(0, 1.25, 0.24, 2.6, 0.08, 0, K.DK), pr(-0.35, 2.45, 0.8, 0.24, 0.08, 0, K.DK), pp([[-0.9, 0], [0, -1.85], [0.9, 0]], '#FF8F9C', 1)],
+  key: () => [pc(-1.6, 0, 1.05, K.GD), pr(1.0, 0, 3.6, 0.6, 0.15, 0, K.GD), pr(2.4, 0.55, 0.38, 0.6, 0.05, 0, K.GD), pr(1.7, 0.5, 0.38, 0.5, 0.05, 0, K.GD), pc(-1.6, 0, 0.45, '#E6A800', 1)],
+  snail: () => [pr(0.1, 1.05, 4.6, 0.85, 0.42, 0, '#C7BFF2'), pc(-2.0, 0.8, 0.55, '#C7BFF2'), pr(-2.1, 0.0, 0.18, 1.1, 0.06, 0.2, '#C7BFF2'), pc(0.3, -0.25, 1.45, '#FF9F43'), pc(0.35, -0.25, 0.95, '#FFB86B', 1), pc(0.4, -0.25, 0.5, '#FF9F43', 2), pc(-2.2, -0.5, 0.2, K.DK, 1)],
+  train: () => [pr(-0.5, 0.2, 3.4, 1.6, 0.25, 0, K.RD), pr(1.6, -0.4, 1.3, 2.8, 0.2, 0, K.RD), pr(-1.3, -1.1, 0.6, 1.0, 0.1, 0, K.DK), pp([[-2.2, 0.6], [-2.2, 1.4], [-2.9, 1.4]], K.Y), pc(-1.5, 1.25, 0.55, K.DK, 1), pc(0, 1.25, 0.55, K.DK, 1), pc(1.5, 1.25, 0.55, K.DK, 1), pr(1.6, -1.0, 0.8, 0.8, 0.12, 0, K.GL, 1)],
+  plane: () => [pe(0, 0, 2.9, 0.62, 0, K.SK), pp([[-0.7, 0], [0.5, 0], [-0.4, -2.6], [-1.1, -2.6]], K.BL), pp([[-0.7, 0], [0.5, 0], [-0.4, 2.6], [-1.1, 2.6]], K.BL), pp([[-2.3, 0], [-2.9, 0], [-3.2, -1.2], [-2.6, -1.2]], K.BL), pc(1.2, -0.05, 0.18, K.WH, 1), pc(0.6, -0.05, 0.18, K.WH, 1), pc(0, -0.05, 0.18, K.WH, 1)],
+  ladybug: () => [pc(0, 0.3, 1.9, K.RD), pc(0, -1.75, 0.85, K.DK), pr(0, 0.3, 0.12, 3.6, 0.05, 0, K.DK, 1), pc(-0.9, -0.2, 0.35, K.DK, 1), pc(0.9, -0.2, 0.35, K.DK, 1), pc(-0.8, 1.1, 0.32, K.DK, 1), pc(0.8, 1.1, 0.32, K.DK, 1), pc(-0.35, -1.9, 0.14, K.WH, 1), pc(0.35, -1.9, 0.14, K.WH, 1)],
+  strawberry: () => [pp(polarPts(t => 2.2 * (1 - 0.32 * Math.sin(t)) * (1 + 0.05 * Math.cos(2 * t)), 72).map(([x, z]) => [x, z * 1.1 + 0.3]), K.RD), pp(starPts(0, -1.75, 1.2, 0.45, 6), K.GR, 1), ...[[-0.8, 0], [0.8, 0], [0, 0.6], [-0.5, 1.2], [0.5, 1.2], [-1.2, 0.8], [1.2, 0.8]].map(([x, z]) => pe(x, z, 0.08, 0.14, 0, '#FFE066', 1))],
+  watermelon: () => [pp(halfEllipsePts(0, -0.8, 3.0, 2.8, false), '#5BBF5B'), pp(halfEllipsePts(0, -0.8, 2.55, 2.35, false), '#FF4D6D', 1), ...[[-1.2, 0], [0, 0.4], [1.2, 0], [-0.6, 0.9], [0.6, 0.9]].map(([x, z]) => pe(x, z, 0.1, 0.18, 0, K.DK, 2))],
+  octopus: () => [pe(0, -0.7, 1.8, 1.6, 0, '#C77DFF'), ...[-1.6, -0.8, 0, 0.8, 1.6].map((x, i) => pe(x, 1.25, 0.36, 1.05, (i - 2) * 0.18, '#C77DFF')), pc(-0.65, -0.8, 0.36, K.WH, 1), pc(0.65, -0.8, 0.36, K.WH, 1), pc(-0.6, -0.75, 0.18, K.DK, 2), pc(0.7, -0.75, 0.18, K.DK, 2)],
+  dog: () => [pc(0, 0.3, 1.9, '#E0A96D'), pe(-1.9, 0.2, 0.6, 1.3, 0.2, '#8B5A3C'), pe(1.9, 0.2, 0.6, 1.3, -0.2, '#8B5A3C'), pe(0, 1.0, 1.0, 0.75, 0, K.CR, 1), pe(0, 0.7, 0.4, 0.28, 0, K.DK, 2), pc(-0.7, -0.2, 0.17, K.DK, 1), pc(0.7, -0.2, 0.17, K.DK, 1), pe(0.8, -0.8, 0.55, 0.45, 0, '#8B5A3C', 1)],
+  penguin: () => [pe(0, 0.2, 1.6, 2.3, 0, K.DK), pe(0, 0.55, 1.1, 1.75, 0, K.WH, 1), pp([[-0.3, -0.9], [0.3, -0.9], [0, -0.45]], K.OR, 2), pe(-0.6, 2.4, 0.5, 0.25, 0, K.OR), pe(0.6, 2.4, 0.5, 0.25, 0, K.OR), pc(-0.45, -1.3, 0.14, K.DK, 2), pc(0.45, -1.3, 0.14, K.DK, 2)],
+  frog: () => [pe(0, 0.5, 2.2, 1.4, 0, K.GR), pc(-1.1, -0.8, 0.75, K.GR), pc(1.1, -0.8, 0.75, K.GR), pc(-1.1, -0.85, 0.45, K.WH, 1), pc(1.1, -0.85, 0.45, K.WH, 1), pc(-1.05, -0.85, 0.22, K.DK, 2), pc(1.15, -0.85, 0.22, K.DK, 2), pr(0, 0.9, 1.6, 0.18, 0.08, 0, '#2F7A3A', 1), pc(-1.4, 0.6, 0.3, '#FF9CB5', 1), pc(1.4, 0.6, 0.3, '#FF9CB5', 1)],
+};
+const HIDDEN_SIZE = 5.6;
+const HIDDEN = Object.entries(TOY_DEFS).map(([name, make]) => ({ name, parts: normalise(make(), HIDDEN_SIZE) }));
+
+/* Pop Board: regular arrangements plus chunky silhouettes, each in a roomy and a dense packing. */
+const POP_SHAPES = ['heart', 'star', 'cat', 'teddy', 'bunny', 'duck', 'fish', 'whale', 'turtle', 'apple', 'cloud', 'flower', 'butterfly', 'mushroom', 'house', 'car', 'icecream', 'cupcake', 'octopus', 'sun', 'moon', 'ladybug', 'strawberry', 'frog', 'dog', 'crown', 'rocket', 'robot', 'gem', 'balloon'];
+const POP_DENSITY = [{ sp: 0.98, r: 0.42 }, { sp: 0.8, r: 0.34 }];
+function hexFill(inside, box, sp, r) {
+  const b = [], h = sp * 0.866, k = r * 0.75;
+  for (let j = 0, z = box[1]; z <= box[3]; j++, z += h)
+    for (let x = box[0] + (j % 2 ? sp / 2 : 0); x <= box[2]; x += sp)
+      if (inside(x, z) && inside(x + k, z) && inside(x - k, z) && inside(x, z + k) && inside(x, z - k)) b.push({ x, z, r });
+  return b;
+}
+function finishBoard(bubbles, board) {
   let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
   for (const b of bubbles) { x0 = Math.min(x0, b.x - b.r); x1 = Math.max(x1, b.x + b.r); z0 = Math.min(z0, b.z - b.r); z1 = Math.max(z1, b.z + b.r); }
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
   for (const b of bubbles) { b.x -= cx; b.z -= cz; }
-  if (board === 'circle') {
-    const R = Math.max(...bubbles.map(b => Math.hypot(b.x, b.z) + b.r)) + 0.45;
-    return { bubbles, board: { type: 'circle', R, w: 2 * R, d: 2 * R } };
+  if (board.type === 'circle') { const R = Math.max(...bubbles.map(b => Math.hypot(b.x, b.z) + b.r)) + 0.45; return { bubbles, board: { type: 'circle', R, w: 2 * R, d: 2 * R } }; }
+  if (board.type === 'poly') {
+    const poly = board.poly.map(([x, z]) => [x - cx, z - cz]), xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
+    return { bubbles, board: { type: 'poly', poly, w: Math.max(...xs) - Math.min(...xs), d: Math.max(...zs) - Math.min(...zs) } };
   }
   return { bubbles, board: { type: 'rect', w: x1 - x0 + 0.9, d: z1 - z0 + 0.9 } };
 }
-function popGrid(cols, rows, sp, r, stagger) {
-  const b = [];
-  for (let j = 0; j < rows; j++) {
-    const odd = stagger && j % 2, n = odd ? cols - 1 : cols, off = odd ? sp / 2 : 0;
-    for (let i = 0; i < n; i++) b.push({ x: i * sp + off, z: j * sp * (stagger ? 0.88 : 1), r, g: j });
-  }
-  return popFinish(b, 'rect');
-}
-function popRings(counts, sp, r) {
-  const b = [{ x: 0, z: 0, r, g: 0 }];
-  counts.forEach((n, k) => { for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2 + k * 0.3; b.push({ x: Math.cos(a) * sp * (k + 1), z: Math.sin(a) * sp * (k + 1), r, g: k + 1 }); } });
-  return popFinish(b, 'circle');
-}
-function popSunflower(n, c, r) {
-  const b = [];
-  for (let i = 0; i < n; i++) { const rad = c * Math.sqrt(i + 0.6), th = i * 2.399963; b.push({ x: Math.cos(th) * rad, z: Math.sin(th) * rad, r, g: i / n }); }
-  return popFinish(b, 'circle');
-}
-const CAT = (() => {
-  const head = (x, z) => Math.hypot(x, z - 0.4) <= 2.6;
-  const earL = [[-2.5, -0.6], [-2.15, -3.5], [-0.5, -2.0]], earR = earL.map(([x, z]) => [-x, z]);
-  return (x, z) => head(x, z) || pointInPoly(x, z, earL) || pointInPoly(x, z, earR);
-})();
-function popCat(sp, r) {
-  const b = [], h = sp * 0.866;
-  for (let j = 0, z = -3.6; z <= 3.1; j++, z += h) {
-    for (let x = -2.8 + (j % 2 ? sp / 2 : 0); x <= 2.8; x += sp) {
-      const k = r * 0.75;
-      if (CAT(x, z) && CAT(x + k, z) && CAT(x - k, z) && CAT(x, z + k) && CAT(x, z - k)) b.push({ x, z, r, g: j });
-    }
-  }
-  return popFinish(b, 'rect');
-}
-const POP_PAL = {
-  grid: { board: '#3B4272', colors: ['#FF6B8B', '#FF9F5A', '#FFD45A', '#7BD88F', '#5AC8FA', '#A08CFF', '#FF7FD1'] },
-  rings: { board: '#FFD6E2', colors: ['#FF4F7E', '#FF7F9F', '#FFA36B', '#FFD25E', '#FFE78F'] },
-  sun: { board: '#24324D', hue: true },
-  cat: { board: '#FFE2BD', colors: ['#FF8C3A', '#FFA155', '#FFB46E', '#FFC488'] },
+const POP_ARRANGEMENTS = {
+  grid: ({ sp, r }) => { const n = Math.round(7.4 / sp), b = []; for (let j = 0; j < Math.round(n * 0.75); j++) for (let i = 0; i < n; i++) b.push({ x: i * sp, z: j * sp, r }); return finishBoard(b, { type: 'rect' }); },
+  honeycomb: ({ sp, r }) => finishBoard(hexFill((x, z) => Math.abs(x) <= 3.7 && Math.abs(z) <= 2.8, [-3.7, -2.8, 3.7, 2.8], sp, r), { type: 'rect' }),
+  rings: ({ sp, r }) => { const b = [{ x: 0, z: 0, r }]; for (let k = 1; k * sp * 1.07 <= 3.4; k++) { const R = k * sp * 1.07, n = Math.floor(TAU * R / sp); for (let i = 0; i < n; i++) b.push({ x: Math.cos(i / n * TAU + k * 0.3) * R, z: Math.sin(i / n * TAU + k * 0.3) * R, r }); } return finishBoard(b, { type: 'circle' }); },
+  sunflower: ({ sp, r }) => { const c = sp * 0.56, b = []; for (let i = 0; c * Math.sqrt(i + 0.6) <= 3.5; i++) { const rad = c * Math.sqrt(i + 0.6), th = i * 2.399963; b.push({ x: Math.cos(th) * rad, z: Math.sin(th) * rad, r }); } return finishBoard(b, { type: 'circle' }); },
+  diamond: ({ sp, r }) => finishBoard(hexFill((x, z) => Math.abs(x) / 3.8 + Math.abs(z) / 3.3 <= 1, [-3.8, -3.3, 3.8, 3.3], sp, r), { type: 'poly', poly: [[-4.5, 0], [0, -4.0], [4.5, 0], [0, 4.0]] }),
+  triangle: ({ sp, r }) => { const tri = [[-3.9, 2.6], [3.9, 2.6], [0, -3.6]]; return finishBoard(hexFill((x, z) => pointInPoly(x, z, tri), [-3.9, -3.6, 3.9, 2.6], sp, r), { type: 'poly', poly: [[-4.9, 3.1], [4.9, 3.1], [0, -4.6]] }); },
+  hexagon: ({ sp, r }) => { const hexP = Array.from({ length: 6 }, (_, i) => [Math.cos(i / 6 * TAU) * 3.6, Math.sin(i / 6 * TAU) * 3.6]); return finishBoard(hexFill((x, z) => pointInPoly(x, z, hexP), [-3.6, -3.2, 3.6, 3.2], sp, r), { type: 'poly', poly: hexP.map(([x, z]) => [x * 1.17, z * 1.17]) }); },
+  plus: ({ sp, r }) => { const inP = (x, z) => (Math.abs(x) <= 3.6 && Math.abs(z) <= 1.25) || (Math.abs(z) <= 3.6 && Math.abs(x) <= 1.25); return finishBoard(hexFill(inP, [-3.6, -3.6, 3.6, 3.6], sp, r), { type: 'poly', poly: outlineOf(inP, [-3.6, -3.6, 3.6, 3.6], 0.08, 0.55) }); },
+  frame: ({ sp, r }) => { const inP = (x, z) => Math.abs(x) <= 3.7 && Math.abs(z) <= 3.0 && !(Math.abs(x) < 1.9 && Math.abs(z) < 1.2); return finishBoard(hexFill(inP, [-3.7, -3.0, 3.7, 3.0], sp, r), { type: 'rect' }); },
+  spiral: ({ sp, r }) => { const b = []; for (let t = 1.2; ; t += 0.01) { const rad = sp * 0.3 * t; if (rad > 3.5) break; const p = { x: Math.cos(t) * rad, z: Math.sin(t) * rad, r }; if (!b.length || Math.hypot(p.x - b[b.length - 1].x, p.z - b[b.length - 1].z) >= sp) b.push(p); } return finishBoard(b, { type: 'circle' }); },
 };
-const POP_CONFIGS = [
-  { family: 'Grid', label: 'Grid · layout A', pal: 'grid', build: () => popGrid(8, 6, 1.12, 0.47, false) },
-  { family: 'Rings', label: 'Rings · layout A', pal: 'rings', build: () => popRings([6, 12, 18], 1.05, 0.42) },
-  { family: 'Sunflower', label: 'Sunflower · layout A', pal: 'sun', build: () => popSunflower(48, 0.52, 0.38) },
-  { family: 'Cat', label: 'Cat · layout A', pal: 'cat', build: () => popCat(0.84, 0.37) },
-  { family: 'Grid', label: 'Grid · layout B', pal: 'grid', build: () => popGrid(9, 7, 0.98, 0.42, true) },
-  { family: 'Rings', label: 'Rings · layout B', pal: 'rings', build: () => popRings([8, 14, 20, 26], 0.86, 0.35) },
-  { family: 'Sunflower', label: 'Sunflower · layout B', pal: 'sun', build: () => popSunflower(70, 0.44, 0.32) },
-  { family: 'Cat', label: 'Cat · layout B', pal: 'cat', build: () => popCat(0.72, 0.31) },
+function popSilhouette(name, { sp, r }) {
+  const parts = normalise(TOY_DEFS[name](), 7.4), inside = (x, z) => insideParts(parts, x, z), box = partsBox(parts);
+  return finishBoard(hexFill(inside, box, sp, r), { type: 'poly', poly: outlineOf(inside, box, 0.08, 0.5) });
+}
+// Packings that would leave fewer than 18 bubbles (checked offline) are left out.
+const POP_SPARSE = [['triangle', 'rocket', 'star', 'duck', 'fish', 'whale', 'mushroom', 'icecream', 'moon'], ['rocket']];
+const POP_CONFIGS = [];
+for (const [di, dens] of POP_DENSITY.entries()) {
+  for (const name of Object.keys(POP_ARRANGEMENTS)) if (!POP_SPARSE[di].includes(name)) POP_CONFIGS.push({ name, dense: di, round: ['rings', 'sunflower', 'spiral'].includes(name), build: () => POP_ARRANGEMENTS[name](dens) });
+  for (const name of POP_SHAPES) if (!POP_SPARSE[di].includes(name)) POP_CONFIGS.push({ name, dense: di, round: false, build: () => popSilhouette(name, dens) });
+}
+// Bright colourways: palette x colouring pattern. Cosmetic only, so they are counted separately from layouts.
+const POP_PALETTES = [
+  [['#FF5C7A', '#FF9F43', '#FFD93D', '#6BCB77', '#4D96FF', '#9B5DE5'], '#2E3156'], [['#FF8FC7', '#FFB3DE', '#B28DFF', '#8FD3FF', '#FFF07C'], '#3B3F78'],
+  [['#FF3EA5', '#00F5D4', '#FEE440', '#9B5DE5', '#00BBF9'], '#1F2240'], [['#FF4E50', '#FC913A', '#F9D423', '#FF6F91', '#FF9671'], '#3A2E5C'],
+  [['#00B4D8', '#48CAE4', '#90E0EF', '#0096C7', '#00F5D4'], '#FFFFFF'], [['#FF6B6B', '#FFD93D', '#6BCB77', '#4ECDC4', '#FF9F1C'], '#FFFFFF'],
+  [['#F72585', '#FF5E9C', '#B5179E', '#7209B7', '#FF8FAB'], '#FFE5EF'], [['#FFD60A', '#FFC300', '#A7E22E', '#FF9F1C', '#FFE66D'], '#2B4C7E'],
+  [['#2EC4B6', '#80ED99', '#57CC99', '#38D9A9', '#C7F9CC'], '#22325A'], [['#FF99C8', '#FCF6BD', '#D0F4DE', '#A9DEF9', '#E4C1F9'], '#3E4A89'],
+  [['#FF4800', '#FF6D00', '#FF9E00', '#FFC300', '#FF006E'], '#2A1E3F'], [['#7400B8', '#6930C3', '#5E60CE', '#4EA8DE', '#48BFE3', '#64DFDF'], '#FFFFFF'],
+  [['#F94144', '#F3722C', '#F8961E', '#F9C74F', '#90BE6D', '#43AA8B'], '#FFFFFF'], [['#FF5D8F', '#FF97B7', '#FFC4D6', '#FF4D8D', '#FFB3C6'], '#2D3561'],
+  [['#B5E48C', '#99D98C', '#76C893', '#D9ED92', '#52B69A'], '#1E3A5F'], [['#4CC9F0', '#4895EF', '#4361EE', '#7FDBFF', '#3A86FF'], '#FFFFFF'],
+  [['#FFADAD', '#FFD6A5', '#FDFFB6', '#CAFFBF', '#9BF6FF', '#BDB2FF'], '#3B3F78'], [['#C77DFF', '#9D4EDD', '#E0AAFF', '#7B2CBF', '#F2B5FF'], '#FFF4E6'],
+  [['#FF6F59', '#43AA8B', '#FFD166', '#06D6A0', '#118AB2'], '#FFFFFF'], [['#FFC6FF', '#BDB2FF', '#A0C4FF', '#9BF6FF', '#CAFFBF'], '#4A4E8F'],
+  [['#FF4D6D', '#FF8FA3', '#7CC576', '#FFB3C1', '#38B000'], '#FFF1F3'], [['#FFD166', '#EF476F', '#06D6A0', '#FFF3B0', '#118AB2'], '#2E3156'],
+  [['#FF006E', '#FB5607', '#FFBE0B', '#3A86FF', '#8338EC'], '#FFFFFF'], [['#F15BB5', '#FEE440', '#00BBF9', '#00F5D4', '#9B5DE5'], '#26294A'],
+].map(([colors, board]) => ({ colors, board }));
+const POP_PATTERNS = ['rows', 'columns', 'rings', 'diagonal', 'wheel', 'confetti', 'checker'];
+function popColourIndex(pattern, b, i, sp, n) {
+  const row = Math.round(b.z / (sp * 0.866)), col = Math.round(b.x / sp);
+  switch (pattern) {
+    case 'rows': return row;
+    case 'columns': return col;
+    case 'rings': return Math.round(Math.hypot(b.x, b.z) / sp);
+    case 'diagonal': return Math.round((b.x + b.z) / sp);
+    case 'wheel': return Math.floor((Math.atan2(b.z, b.x) / TAU + 0.5) * n);
+    case 'confetti': return Math.floor(mulberry32(i * 7919 + 13)() * n);
+    default: return (row + col) & 1 ? 1 : 0;
+  }
+}
+
+/* Sand Slice: geometric blocks plus toy-shaped moulds. Every shape keeps one outline polygon. */
+const sq = (w, d) => [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]];
+const ngon = (n, R, a = 0) => Array.from({ length: n }, (_, i) => { const t = a + i / n * TAU; return [Math.cos(t) * R, Math.sin(t) * R]; });
+const superellipse = (rx, rz, e, n = 72) => Array.from({ length: n }, (_, i) => { const t = i / n * TAU, c = Math.cos(t), s = Math.sin(t); return [rx * Math.sign(c) * Math.abs(c) ** (2 / e), rz * Math.sign(s) * Math.abs(s) ** (2 / e)]; });
+const fromInside = (inside, box) => outlineOf(inside, box, 0.06);
+const V = [0, 1], H = [1, 0], D1 = [1, 1], D2 = [-1, 1];
+const GEOMETRIC = [
+  ['square', sq(5.4, 5.4), [V, D1]], ['loaf', sq(7.2, 3.6), [V, D1]], ['bar', sq(8, 2.8), [V, D1]], ['tall block', sq(4, 6.4), [H, D2]],
+  ['triangle', ngon(3, 3.6, -Math.PI / 2), [V, H]], ['diamond', [[-3.4, 0], [0, -2.3], [3.4, 0], [0, 2.3]], [V, H]], ['pentagon', ngon(5, 3.1, -Math.PI / 2), [V, D1]],
+  ['hexagon', ngon(6, 3.0, Math.PI / 6), [V, H]], ['octagon', ngon(8, 3.0, Math.PI / 8), [V, D1]], ['round', ngon(36, 2.9), [V, D1]], ['oval', ellipsePts(0, 0, 3.6, 2.4, 0, 48), [V, H]],
+  ['wedge', [[-3.6, 1.7], [3.6, 1.7], [2.3, -1.7], [-2.3, -1.7]], [V, D2]], ['parallelogram', [[-3.8, 1.6], [2.2, 1.6], [3.8, -1.6], [-2.2, -1.6]], [V, D1]],
+  ['kite', [[0, -3.4], [2.2, -0.8], [0, 3.0], [-2.2, -0.8]], [H, V]], ['semicircle', halfEllipsePts(0, 1.4, 3.4, 3.2), [V, H]],
+  ['fan', [[0, 2.4], ...Array.from({ length: 25 }, (_, i) => { const t = -Math.PI * 0.75 + i / 24 * Math.PI / 2; return [Math.cos(t) * 5.2, 2.4 + Math.sin(t) * 5.2]; })], [V, D1]],
+  ['egg', polarPts(t => 2.7 * (1 + 0.16 * Math.sin(t)), 64), [V, H]], ['rounded square', superellipse(2.8, 2.8, 4), [V, D1]], ['pillow', superellipse(3.6, 2.4, 6), [V, H]],
+  ['lemon', fromInside((x, z) => Math.hypot(x, z - 2.4) < 3.6 && Math.hypot(x, z + 2.4) < 3.6, [-3.6, -1.3, 3.6, 1.3]), [V, D1]],
+  ['star', starPts(0, 0, 3.3, 1.6), [V, H]], ['six-star', starPts(0, 0, 3.2, 1.85, 6), [V, D1]], ['heart', heartPts(0.2), [V, H]], ['crescent', crescentPts(3.0, 2.5, 1.3), [V, H]],
+  ['L-block', [[-3, -3], [-1, -3], [-1, 1], [3, 1], [3, 3], [-3, 3]], [V, H]], ['U-block', [[-3.2, -2.6], [-1.3, -2.6], [-1.3, 0.6], [1.3, 0.6], [1.3, -2.6], [3.2, -2.6], [3.2, 2.6], [-3.2, 2.6]], [V, H]],
+  ['T-block', [[-3.4, -2.8], [3.4, -2.8], [3.4, -0.8], [1.1, -0.8], [1.1, 2.8], [-1.1, 2.8], [-1.1, -0.8], [-3.4, -0.8]], [V, H]],
+  ['plus', [[-1.2, -3.4], [1.2, -3.4], [1.2, -1.2], [3.4, -1.2], [3.4, 1.2], [1.2, 1.2], [1.2, 3.4], [-1.2, 3.4], [-1.2, 1.2], [-3.4, 1.2], [-3.4, -1.2], [-1.2, -1.2]], [V, D1]],
+  ['arch', fromInside((x, z) => Math.abs(x) <= 3 && z <= 2.6 && (z >= -0.4 || Math.hypot(x, z + 0.4) <= 3) && !(Math.abs(x) < 1.2 && z > 0.6), [-3, -3.4, 3, 2.6]), [V, H]],
+  ['cloud', polarPts(t => 2.5 + 0.45 * Math.abs(Math.sin(3 * t)), 120), [V, H]], ['flower', polarPts(t => 2.5 + 0.7 * Math.cos(5 * t), 120), [V, H]],
+  ['gear', polarPts(t => 2.7 + 0.35 * Math.max(-1, Math.min(1, 3 * Math.sin(8 * t))), 160), [V, D1]], ['blob', polarPts(t => 2.6 + 0.4 * Math.sin(2 * t + 1) + 0.28 * Math.sin(3 * t + 2), 96), [V, H]],
+  ['house', [[-2.6, 2.6], [2.6, 2.6], [2.6, -0.6], [0, -3.0], [-2.6, -0.6]], [V, H]], ['arrow', [[-3.6, -0.9], [0.6, -0.9], [0.6, -2.4], [3.6, 0], [0.6, 2.4], [0.6, 0.9], [-3.6, 0.9]].map(([x, z]) => [x, z * 1.2]), [V, H]],
+  ['chevron', [[-3.4, -2.4], [-1.2, -2.4], [1.6, 0], [-1.2, 2.4], [-3.4, 2.4], [-0.6, 0]].map(([x, z]) => [x * 1.05 + 0.8, z]), [V, H]],
+  ['hourglass', [[-2.6, -3.0], [2.6, -3.0], [0.9, 0], [2.6, 3.0], [-2.6, 3.0], [-0.9, 0]], [H, D1]], ['bowtie', [[-3.4, -2.4], [0, -0.8], [3.4, -2.4], [3.4, 2.4], [0, 0.8], [-3.4, 2.4]], [V, D1]],
+  ['tree', [[0, -3.6], [2.0, -1.2], [1.0, -1.2], [2.8, 1.2], [0.7, 1.2], [0.7, 3.0], [-0.7, 3.0], [-0.7, 1.2], [-2.8, 1.2], [-1.0, -1.2], [-2.0, -1.2]], [V, H]],
+  ['bell', fromInside((x, z) => z <= 2.4 && z >= -2.8 && Math.abs(x) <= (z > 1.6 ? 3.0 : 1.3 + 1.6 * ((z + 2.8) / 4.4) ** 2) && !(z < -2.2 && Math.abs(x) > 0.9), [-3, -2.8, 3, 2.4]), [V, H]],
+  ['keyhole', fromInside((x, z) => Math.hypot(x, z + 1.0) <= 2.2 || (Math.abs(x) <= 1.0 + (z - 0.4) * 0.45 && z >= 0 && z <= 3.0), [-2.4, -3.2, 2.4, 3.0]), [V, H]],
+  ['peanut', fromInside((x, z) => Math.hypot(x + 1.5, z) <= 1.9 || Math.hypot(x - 1.5, z) <= 1.9 || (Math.abs(x) <= 1.5 && Math.abs(z) <= 1.3), [-3.4, -1.9, 3.4, 1.9]), [V, H]],
+  ['puzzle', fromInside((x, z) => ((Math.abs(x) <= 2.4 && Math.abs(z) <= 2.4) || Math.hypot(x - 2.9, z) <= 0.75 || Math.hypot(x, z + 2.9) <= 0.75) && Math.hypot(x + 2.4, z) > 0.75 && Math.hypot(x, z - 2.4) > 0.75, [-2.4, -3.7, 3.7, 2.4]), [V, H]],
 ];
+const SAND_LAYERS = [
+  ['#F6B4C8', '#FBE2B0', '#B8E2CC', '#C7BFF2', '#F7C0A4'], ['#9FD3EE', '#F4E7BF', '#F5AFC4', '#BFE3B4'], ['#F9C77E', '#F4A3B9', '#FCE7C4', '#B9A8F0', '#96D9C6'],
+  ['#B5E48C', '#FFE08A', '#FF9FB2', '#9ED8F5'], ['#FF9AA2', '#FFDAC1', '#E2F0CB', '#B5EAD7', '#C7CEEA'], ['#FFC6FF', '#FFADAD', '#FDFFB6', '#9BF6FF'],
+  ['#A0E7E5', '#B4F8C8', '#FBE7C6', '#FFAEBC'], ['#FFD6A5', '#CAFFBF', '#A0C4FF', '#FFC6FF', '#FDFFB6'],
+];
+// Cut directions that allow six valid cuts (checked offline with sandFeasible). Robot cannot take six cuts, so it is not a sand mould.
+const SAND_DIR_FIX = { semicircle: [V, D1], lemon: [V], rocket: [H, D1], boat: [V, D1], mushroom: [V, D1], whale: [V, D1], crown: [V, D1], guitar: [H, D1], umbrella: [V, D1], key: [V, D1], watermelon: [V, D1] };
+const SAND_SHAPES = [
+  ...GEOMETRIC.map(([name, poly, dirs]) => ({ name, make: () => poly, dirs: SAND_DIR_FIX[name] || dirs })),
+  ...Object.keys(TOY_DEFS).filter(name => name !== 'robot').map(name => ({ name, make: () => { const parts = normalise(TOY_DEFS[name](), 7.0); return outlineOf((x, z) => insideParts(parts, x, z), partsBox(parts), 0.07); }, dirs: SAND_DIR_FIX[name] || [V, H] })),
+].map((s, i) => ({
+  ...s, layers: SAND_LAYERS[i % SAND_LAYERS.length],
+  get poly() { return this._poly || (this._poly = centerPoly(this.make())); },
+  get tray() { const xs = this.poly.map(p => p[0]), zs = this.poly.map(p => p[1]); return [Math.max(...xs) - Math.min(...xs) + 1.8, Math.max(...zs) - Math.min(...zs) + 1.8]; },
+}));
+const SAND_CONFIGS = [];
+for (const k of [0, 1]) for (const s of SAND_SHAPES) if (s.dirs[k]) SAND_CONFIGS.push({ shape: s, dir: s.dirs[k] });
+
+/* Foam Reveal: every hidden toy under two foam layouts. */
+const FOAM_CONFIGS = [];
+for (const layout of ['full', 'drifts']) for (const o of HIDDEN) FOAM_CONFIGS.push({ obj: o, layout });
+
+/* ───────────── domain: Pop Board ───────────── */
 const PopDomain = {
   create(cfg) {
     const { bubbles, board } = cfg.build();
-    return { cfg, bubbles, board, palette: POP_PAL[cfg.pal], popped: new Uint8Array(bubbles.length), done: 0, last: null, seq: 0 };
+    return { cfg, bubbles, board, popped: new Uint8Array(bubbles.length), done: 0, last: null, seq: 0 };
   },
   dispatch(m, a) {
     const ev = [];
@@ -277,20 +479,35 @@ const PopDomain = {
 };
 
 /* ───────────── domain: Sand Slice ───────────── */
-const SAND = { H: 1.25, MIN_W: 0.42, GAP: 0.14, CUTS: 6, COVER: 0.6, MIN_LEN: 0.9, COS: Math.cos(30 * Math.PI / 180) };
-const ngon = (n, R, rot = 0) => Array.from({ length: n }, (_, i) => { const a = rot + i / n * Math.PI * 2; return [Math.cos(a) * R, Math.sin(a) * R]; });
-const SAND_SHAPES = [
-  { name: 'Loaf', poly: [[-3.6, -1.8], [3.6, -1.8], [3.6, 1.8], [-3.6, 1.8]], tray: [9, 5.4], layers: ['#F6B4C8', '#FBE2B0', '#B8E2CC', '#C7BFF2', '#F7C0A4'] },
-  { name: 'Hexagon', poly: ngon(6, 2.9, Math.PI / 6), tray: [7.6, 7.2], layers: ['#9FD3EE', '#F4E7BF', '#F5AFC4', '#BFE3B4'] },
-  { name: 'Round cake', poly: ngon(20, 2.8), tray: [7.4, 7.4], layers: ['#F9C77E', '#F4A3B9', '#FCE7C4', '#B9A8F0', '#96D9C6'] },
-  { name: 'Wedge', poly: [[-3.6, 1.7], [3.6, 1.7], [2.3, -1.7], [-2.3, -1.7]], tray: [9, 5.2], layers: ['#B5E48C', '#FFE08A', '#FF9FB2', '#9ED8F5'] },
-];
-const SAND_DIRS = {
-  Loaf: [[0, 1], [1, 1]], Hexagon: [[0, 1], [1, 0]], 'Round cake': [[0, 1], [1, 1]], Wedge: [[0, 1], [-1, 1]],
-};
-const SAND_CONFIGS = [];
-for (const k of [0, 1]) for (const s of SAND_SHAPES) SAND_CONFIGS.push({ shape: s, dir: SAND_DIRS[s.name][k], label: `${s.name} · direction ${k ? 'B' : 'A'}` });
-
+// Cuts split the piece along the chord through the gesture's midpoint, so concave shapes work too.
+const SAND = { H: 1.25, MIN_W: 0.42, MIN_AREA: 0.3, GAP: 0.14, CUTS: 6, COVER: 0.6, MIN_LEN: 0.9, COS: Math.cos(30 * Math.PI / 180) };
+// Every crossing of the line ml + t·u with the polygon, sorted along t, each with the edge it lies on.
+function lineHits(poly, ml, u) {
+  const hits = [];
+  for (let i = 0; i < poly.length; i++) {
+    const q0 = poly[i], q1 = poly[(i + 1) % poly.length], e = [q1[0] - q0[0], q1[1] - q0[1]], den = cross2(u, e);
+    if (Math.abs(den) < 1e-12) continue;
+    const w = [q0[0] - ml[0], q0[1] - ml[1]], sg = cross2(w, u) / den;
+    if (sg >= 0 && sg < 1) hits.push({ t: cross2(w, e) / den, i });
+  }
+  return hits.sort((a, b) => a.t - b.t);
+}
+// The inside stretch of that line which contains t = 0, or null.
+function chordAt(poly, ml, u) {
+  const hits = lineHits(poly, ml, u);
+  for (let k = 0; k + 1 < hits.length; k += 2) if (hits[k].t <= 0 && hits[k + 1].t >= 0) return [hits[k], hits[k + 1]];
+  return null;
+}
+function splitAlong(poly, ml, u, enter, exit) {
+  const P = [ml[0] + u[0] * enter.t, ml[1] + u[1] * enter.t], Q = [ml[0] + u[0] * exit.t, ml[1] + u[1] * exit.t], n = poly.length;
+  const A = [P], B = [Q];
+  for (let i = (enter.i + 1) % n; ; i = (i + 1) % n) { A.push(poly[i]); if (i === exit.i) break; }
+  A.push(Q);
+  for (let i = (exit.i + 1) % n; ; i = (i + 1) % n) { B.push(poly[i]); if (i === enter.i) break; }
+  B.push(P);
+  return [A, B];
+}
+const extentAlong = (poly, n) => { const v = poly.map(q => q[0] * n[0] + q[1] * n[1]); return Math.max(...v) - Math.min(...v); };
 const SandDomain = {
   create(cfg) {
     const l = Math.hypot(...cfg.dir), u = [cfg.dir[0] / l, cfg.dir[1] / l];
@@ -321,25 +538,16 @@ const SandDomain = {
     const idx = m.pieces.findIndex(p => pointInPoly(mid[0] - p.shift[0], mid[1] - p.shift[1], p.poly));
     if (idx < 0) { res.reason = 'miss'; return res; }
     const p = m.pieces[idx], s = p.shift, ml = [mid[0] - s[0], mid[1] - s[1]];
-    const ts = [];
-    for (let i = 0; i < p.poly.length; i++) {
-      const q0 = p.poly[i], q1 = p.poly[(i + 1) % p.poly.length], e = [q1[0] - q0[0], q1[1] - q0[1]];
-      const den = cross2(u, e);
-      if (Math.abs(den) < 1e-9) continue;
-      const w = [q0[0] - ml[0], q0[1] - ml[1]], t = cross2(w, e) / den, sg = cross2(w, u) / den;
-      if (sg >= -1e-9 && sg <= 1 + 1e-9) ts.push(t);
-    }
-    if (ts.length < 2) { res.reason = 'miss'; return res; }
-    const tmin = Math.min(...ts), tmax = Math.max(...ts);
+    const chord = chordAt(p.poly, ml, u);
+    if (!chord) { res.reason = 'miss'; return res; }
+    const tmin = chord[0].t, tmax = chord[1].t;
     res.line = { from: [ml[0] + u[0] * tmin + s[0], ml[1] + u[1] * tmin + s[1]], to: [ml[0] + u[0] * tmax + s[0], ml[1] + u[1] * tmax + s[1]] };
     const ga = (a[0] - s[0] - ml[0]) * u[0] + (a[1] - s[1] - ml[1]) * u[1];
     const gb = (b[0] - s[0] - ml[0]) * u[0] + (b[1] - s[1] - ml[1]) * u[1];
     const cover = (Math.min(Math.max(ga, gb), tmax) - Math.max(Math.min(ga, gb), tmin)) / (tmax - tmin);
     if (cover < SAND.COVER) { res.reason = 'short'; return res; }
-    const A = clipHalf(p.poly, ml, n, -1), B = clipHalf(p.poly, ml, n, 1);
-    const wA = Math.max(...A.map(q => -((q[0] - ml[0]) * n[0] + (q[1] - ml[1]) * n[1])));
-    const wB = Math.max(...B.map(q => (q[0] - ml[0]) * n[0] + (q[1] - ml[1]) * n[1]));
-    if (A.length < 3 || B.length < 3 || Math.min(wA, wB) < SAND.MIN_W) { res.reason = 'thin'; return res; }
+    const [A, B] = splitAlong(p.poly, ml, u, chord[0], chord[1]);
+    if (A.length < 3 || B.length < 3 || Math.min(extentAlong(A, n), extentAlong(B, n)) < SAND.MIN_W || Math.min(Math.abs(polyArea(A)), Math.abs(polyArea(B))) < SAND.MIN_AREA) { res.reason = 'thin'; return res; }
     return { ok: true, idx, ml, A, B, line: res.line, chord: tmax - tmin };
   },
   commit(m, r, ev) {
@@ -348,7 +556,7 @@ const SandDomain = {
     this.layout(m);
     ev.push({ type: 'cut-committed', seq: ++m.seq, idx: r.idx, line: r.line, chord: r.chord });
   },
-  // All cuts in a round share one direction, so pieces are strips ordered along the normal.
+  // All cuts in a round share one direction, so pieces spread apart in order along the normal.
   layout(m) {
     const order = m.pieces.map((p, i) => [centroid(p.poly)[0] * m.n[0] + centroid(p.poly)[1] * m.n[1], i]).sort((a, b) => a[0] - b[0]);
     const k = order.length;
@@ -358,71 +566,48 @@ const SandDomain = {
   progress: (m) => ({ done: m.cuts.length, total: SAND.CUTS }),
   isComplete: (m) => m.cuts.length >= SAND.CUTS,
 };
-// Proves every catalogue entry allows six evenly spaced cuts.
-function sandFeasibility() {
-  let ok = 0;
-  for (const cfg of SAND_CONFIGS) {
-    const m = SandDomain.create(cfg);
-    const proj = cfg.shape.poly.map(q => q[0] * m.n[0] + q[1] * m.n[1]);
-    const lo = Math.min(...proj), hi = Math.max(...proj), poly = cfg.shape.poly;
-    for (let i = 1; i <= SAND.CUTS; i++) {
-      const pos = lo + (hi - lo) * i / (SAND.CUTS + 1), base = [m.n[0] * pos, m.n[1] * pos], ts = [];
-      for (let e = 0; e < poly.length; e++) {
-        const q0 = poly[e], q1 = poly[(e + 1) % poly.length], d = [q1[0] - q0[0], q1[1] - q0[1]], den = cross2(m.u, d);
-        if (Math.abs(den) < 1e-9) continue;
-        const w = [q0[0] - base[0], q0[1] - base[1]], sg = cross2(w, m.u) / den;
-        if (sg >= 0 && sg <= 1) ts.push(cross2(w, d) / den);
-      }
-      const tm = (Math.min(...ts) + Math.max(...ts)) / 2;
-      const loc = [base[0] + m.u[0] * tm, base[1] + m.u[1] * tm];
-      const piece = m.pieces.find(p => pointInPoly(loc[0], loc[1], p.poly));
-      if (!piece) break;
-      const w = [loc[0] + piece.shift[0], loc[1] + piece.shift[1]];
-      SandDomain.dispatch(m, { type: 'down', x: w[0] - m.u[0] * 9, z: w[1] - m.u[1] * 9 });
-      SandDomain.dispatch(m, { type: 'up', x: w[0] + m.u[0] * 9, z: w[1] + m.u[1] * 9 });
-    }
-    if (SandDomain.isComplete(m) && SandDomain.materialError(m) < 1e-9) ok++;
+// Proves a configuration allows six valid cuts: tries positions across the shape until six are accepted.
+function sandFeasible(cfg) {
+  const m = SandDomain.create(cfg), poly = cfg.shape.poly;
+  const proj = poly.map(q => q[0] * m.n[0] + q[1] * m.n[1]), lo = Math.min(...proj), hi = Math.max(...proj);
+  const order = [];
+  for (let k = 1; k < 40; k++) order.push(k / 40);
+  order.sort((a, b) => Math.abs(((a * 7) % 1) - 0.5) - Math.abs(((b * 7) % 1) - 0.5));
+  for (const f of order) {
+    if (SandDomain.isComplete(m)) break;
+    const pos = lo + (hi - lo) * f, base = [m.n[0] * pos, m.n[1] * pos], hits = lineHits(poly, base, m.u);
+    let best = null;
+    for (let k = 0; k + 1 < hits.length; k += 2) if (!best || hits[k + 1].t - hits[k].t > best[1] - best[0]) best = [hits[k].t, hits[k + 1].t];
+    if (!best) continue;
+    const tm = (best[0] + best[1]) / 2, loc = [base[0] + m.u[0] * tm, base[1] + m.u[1] * tm];
+    const piece = m.pieces.find(p => pointInPoly(loc[0], loc[1], p.poly));
+    if (!piece) continue;
+    const w = [loc[0] + piece.shift[0], loc[1] + piece.shift[1]], reach = (best[1] - best[0]) / 2 + 0.3;
+    SandDomain.dispatch(m, { type: 'down', x: w[0] - m.u[0] * reach, z: w[1] - m.u[1] * reach });
+    SandDomain.dispatch(m, { type: 'up', x: w[0] + m.u[0] * reach, z: w[1] + m.u[1] * reach });
   }
-  return ok;
+  return SandDomain.isComplete(m) && SandDomain.materialError(m) < 1e-6;
 }
 
 /* ───────────── domain: Foam Reveal ───────────── */
 const FOAM = { N: 44, S: 8.8, THRESHOLD: 0.97 };
 FOAM.CELL = FOAM.S / FOAM.N;
-function starPoly() { return Array.from({ length: 10 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 1.18 : 2.75; return [Math.cos(a) * r, Math.sin(a) * r]; }); }
-function heartPoly() { return Array.from({ length: 56 }, (_, i) => { const t = i / 56 * Math.PI * 2; return [16 * Math.sin(t) ** 3 * 0.165, -(13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * 0.165]; }); }
-function fishPoly() {
-  const p = [], a0 = Math.PI - 0.6;
-  for (let i = 0; i <= 30; i++) { const a = -a0 + i / 30 * 2 * a0; p.push([0.6 + Math.cos(a) * 2.1, Math.sin(a) * 1.35]); }
-  p.push([-2.85, 1.35], [-2.15, 0], [-2.85, -1.35]);
-  return p;
-}
-const FOAM_OBJECTS = [
-  { name: 'star', color: '#FFC531', poly: centerPoly(starPoly()) },
-  { name: 'heart', color: '#FF5C8A', poly: centerPoly(heartPoly()) },
-  { name: 'fish', color: '#36B2F0', poly: centerPoly(fishPoly()) },
-  { name: 'gem', color: '#8B6CFF', poly: centerPoly([[-2.7, -0.9], [-1.5, -2.2], [1.5, -2.2], [2.7, -0.9], [0, 2.7]]) },
-];
-const FOAM_CONFIGS = [];
-for (const layout of ['full', 'drifts']) for (const o of FOAM_OBJECTS) FOAM_CONFIGS.push({ obj: o, layout, label: `${o.name[0].toUpperCase() + o.name.slice(1)} · ${layout === 'full' ? 'full cover' : 'drifts'}` });
-
 const FoamDomain = {
   create(cfg, seed) {
-    const { N, S, CELL } = FOAM, poly = cfg.obj.poly;
-    const xs = poly.map(p => p[0]), zs = poly.map(p => p[1]);
-    const objSize = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
+    const { N, S, CELL } = FOAM, parts = cfg.obj.parts, box = partsBox(parts);
+    const objSize = Math.max(box[2] - box[0], box[3] - box[1]);
     const mask = new Uint8Array(N * N), cov = new Float32Array(N * N), noise = new Float32Array(N * N);
     const rnd = mulberry32(seed), ph = [0, 0, 0, 0].map(() => rnd() * 6.283);
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
       const x = -S / 2 + (i + 0.5) * CELL, z = -S / 2 + (j + 0.5) * CELL, c = j * N + i;
-      mask[c] = pointInPoly(x, z, poly) ? 1 : 0;
+      mask[c] = insideParts(parts, x, z) ? 1 : 0;
       noise[c] = Math.sin(x * 0.9 + ph[0]) + Math.sin(z * 1.1 + ph[1]) + 0.7 * Math.sin((x + z) * 1.6 + ph[2]) + 0.5 * Math.sin((x - z) * 2.3 + ph[3]);
     }
     let cut = -Infinity;
     if (cfg.layout === 'drifts') { const vals = [...noise].filter((_, c) => mask[c]).sort((a, b) => a - b); cut = vals[Math.floor(vals.length * 0.3)]; }
     let rel = 0;
     for (let c = 0; c < N * N; c++) { cov[c] = noise[c] >= cut ? 1 : 0; if (mask[c]) rel += cov[c]; }
-    return { cfg, poly, mask, cov, objSize, R: objSize * 0.13, initialRel: rel, remRel: rel, last: null, seq: 0, finished: false };
+    return { cfg, parts, box, mask, cov, objSize, R: objSize * 0.13, initialRel: rel, remRel: rel, last: null, seq: 0, finished: false };
   },
   dispatch(m, a) {
     const ev = [];
@@ -558,13 +743,13 @@ class BaseView {
 /* ───────────── presentation: Pop Board ───────────── */
 const POP_H0 = 0.78, POP_H1 = 0.1;
 class PopView extends BaseView {
-  constructor(m) {
+  constructor(m, look) {
     super();
     this.m = m;
-    const bd = m.board, T = 0.28, BV = 0.08;
-    const shape = bd.type === 'circle' ? new THREE.Shape().absarc(0, 0, bd.R, 0, Math.PI * 2, false) : roundRectShape(bd.w, bd.d, Math.min(0.9, Math.min(bd.w, bd.d) * 0.14));
+    const bd = m.board, T = 0.28, BV = 0.08, pal = look.palette;
+    const shape = bd.type === 'circle' ? new THREE.Shape().absarc(0, 0, bd.R, 0, Math.PI * 2, false) : bd.type === 'poly' ? polyShape(bd.poly) : roundRectShape(bd.w, bd.d, Math.min(0.9, Math.min(bd.w, bd.d) * 0.14));
     this.top = T + 2 * BV;
-    this.root.add(new THREE.Mesh(this.own(slab(shape, T, BV)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: m.palette.board }))));
+    this.root.add(new THREE.Mesh(this.own(slab(shape, T, BV)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: pal.board }))));
     this.shadow(bd.w * 1.35, bd.d * 1.35);
     const n = m.bubbles.length;
     this.domes = this.own(new THREE.InstancedMesh(SHARED.dome, SHARED.plastic, n));
@@ -573,7 +758,8 @@ class PopView extends BaseView {
     this.h = new Float32Array(n); this.t = new Float32Array(n).fill(-1); this.base = [];
     const c = new THREE.Color();
     m.bubbles.forEach((b, i) => {
-      if (m.palette.hue) c.setHSL(b.g * 0.85, 0.78, 0.64); else c.set(m.palette.colors[b.g % m.palette.colors.length]);
+      const n = pal.colors.length, k = popColourIndex(look.pattern, b, i, b.r * 2.34, n);
+      c.set(pal.colors[((k % n) + n) % n]);
       this.base.push(c.clone());
       this.h[i] = m.popped[i] ? POP_H1 : POP_H0;
       this.domes.setColorAt(i, m.popped[i] ? c.clone().multiplyScalar(0.72) : c);
@@ -777,11 +963,11 @@ class FoamView extends BaseView {
     this.trayTop = 0.3;
     this.root.add(new THREE.Mesh(this.own(slab(roundRectShape(tray, tray, 1), 0.18, 0.06)), this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: '#BFE4F2' }))));
     this.shadow(tray * 1.3, tray * 1.3);
-    const objGeo = this.own(slab(polyShape(m.poly), 0.3, 0.13, { bevelSegments: 4 }));
-    this.obj = new THREE.Mesh(objGeo, this.own(new THREE.MeshMatcapMaterial({ matcap: MATCAP.plastic, color: m.cfg.obj.color })));
-    this.obj.position.y = this.trayTop;
+    const toy = partsMesh(m.parts, { depth: 0.3, bevel: 0.07, detail: 0.1 });
+    toy.mats.forEach(x => this.own(x));
+    this.obj = toy.grp; this.obj.position.y = this.trayTop;
     this.root.add(this.obj);
-    this.objTop = this.trayTop + 0.3 + 0.26;
+    this.objTop = this.trayTop + toy.top;
 
     const rnd = mulberry32(seed ^ 0x9e3779b9), cells = [], bx = [], bz = [], by = [], br = [];
     for (let c = 0; c < N * N; c++) {
@@ -808,6 +994,7 @@ class FoamView extends BaseView {
     this.bounds = { w: tray, d: tray, h: 1.1 };
   }
   onEvent() {}
+  dispose() { disposeTree(this.obj); super.dispose(); }
   payoffDuration() { return reduceMotion.matches ? 0.5 : 1.5; }
   update(dt, time, round) {
     const k = 1 - Math.exp(-dt * 16), m = this.m;
@@ -938,27 +1125,40 @@ function emblemTexture() {
   [[0.06, 0.25, '#FFC94A'], [0.94, 0.75, '#7ED9C9'], [0.375, 0.2, '#B9A3FF'], [0.625, 0.8, '#FF8FB1']].forEach(([fx, fy, col]) => star(g, w * fx, h * fy, h * 0.08, col));
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
+// Extrudes a silhouette's parts: base parts form the body, lifted parts sit on top as details.
+function partsMesh(parts, { scale = 1, depth = 0.3, bevel = 0.07, detail = 0.1, mat = null } = {}) {
+  const grp = new THREE.Group(), mats = new Map(), baseTop = depth + 2 * bevel;
+  let top = baseTop;
+  parts.forEach((p, i) => {
+    const material = mat || mats.get(p.col) || mats.set(p.col, mm(p.col)).get(p.col);
+    const poly = scale === 1 ? p.poly : p.poly.map(([x, z]) => [x * scale, z * scale]);
+    const d = p.lift ? detail : depth, bv = p.lift ? detail * 0.35 : bevel;
+    const mesh = new THREE.Mesh(slab(polyShape(poly), d, bv), material);
+    mesh.position.y = p.lift ? baseTop - bv + (p.lift - 1) * (detail + bv) + i * 0.001 : i * 0.002;
+    top = Math.max(top, mesh.position.y + d + 2 * bv);
+    grp.add(mesh);
+  });
+  return { grp, top, mats: [...mats.values()] };
+}
 // A small, recognisable model of any toy configuration, about one unit across, standing on y = 0.
 function miniToy(toy, idx, ghost) {
   const grp = new THREE.Group(), M = (col, cap) => ghost || mm(col, cap);
   if (toy === 'pop') {
-    const cfg = POP_CONFIGS[idx], pal = POP_PAL[cfg.pal], round = cfg.family === 'Rings' || cfg.family === 'Sunflower';
-    const base = new THREE.Mesh(slab(round ? new THREE.Shape().absarc(0, 0, 0.5, 0, Math.PI * 2, false) : roundRectShape(1, 0.78, 0.14), 0.1, 0.03), M(pal.board));
-    grp.add(base);
+    const cfg = POP_CONFIGS[idx], pal = (rounds.pop && rounds.pop.look.palette) || POP_PALETTES[0], round = cfg.round;
+    grp.add(new THREE.Mesh(slab(round ? new THREE.Shape().absarc(0, 0, 0.5, 0, Math.PI * 2, false) : roundRectShape(1, 0.78, 0.14), 0.1, 0.03), M(pal.board)));
     const spots = round ? [[0, 0], ...Array.from({ length: 6 }, (_, i) => [Math.cos(i * 1.047) * 0.28, Math.sin(i * 1.047) * 0.28])] : Array.from({ length: 6 }, (_, i) => [(i % 3 - 1) * 0.3, (Math.floor(i / 3) - 0.5) * 0.3]);
     spots.forEach(([x, z], i) => {
-      const dome = new THREE.Mesh(SHARED.dome, M(pal.hue ? `hsl(${Math.round(i / spots.length * 300)},78%,64%)` : pal.colors[i % pal.colors.length]));
+      const dome = new THREE.Mesh(SHARED.dome, M(pal.colors[i % pal.colors.length]));
       dome.position.set(x, 0.16, z); dome.scale.set(0.11, 0.09, 0.11); grp.add(dome);
     });
   } else if (toy === 'sand') {
-    const shape = SAND_CONFIGS[idx].shape, xs = shape.poly.map(p => p[0]), sc = 1 / (Math.max(...xs) - Math.min(...xs));
-    const poly = shape.poly.map(([x, z]) => [x * sc, z * sc]);
+    const shape = SAND_CONFIGS[idx].shape, xs = shape.poly.map(p => p[0]), zs = shape.poly.map(p => p[1]);
+    const sc = 1 / Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)), poly = shape.poly.map(([x, z]) => [x * sc, z * sc]);
     shape.layers.slice(0, 3).forEach((col, i) => {
       const layer = new THREE.Mesh(slab(polyShape(poly), 0.16, 0), M(col, MATCAP.matte)); layer.position.y = 0.32 - i * 0.16; grp.add(layer);
     });
   } else {
-    const obj = FOAM_CONFIGS[idx].obj, xs = obj.poly.map(p => p[0]), sc = 1 / (Math.max(...xs) - Math.min(...xs));
-    grp.add(new THREE.Mesh(slab(polyShape(obj.poly.map(([x, z]) => [x * sc, z * sc])), 0.14, 0.04), M(obj.color)));
+    grp.add(partsMesh(FOAM_CONFIGS[idx].obj.parts, { scale: 1 / HIDDEN_SIZE, depth: 0.12, bevel: 0.03, detail: 0.05, mat: ghost }).grp);
   }
   return grp;
 }
@@ -1127,7 +1327,7 @@ const Sound = {
 
 /* ───────────── application ───────────── */
 const TOYS = {
-  pop: { domain: PopDomain, configs: POP_CONFIGS, make: (m) => new PopView(m), progress: (m) => m.done / m.bubbles.length },
+  pop: { domain: PopDomain, configs: POP_CONFIGS, make: (m, seed, look) => new PopView(m, look), progress: (m) => m.done / m.bubbles.length },
   sand: { domain: SandDomain, configs: SAND_CONFIGS, make: (m) => new SandView(m), progress: (m) => m.cuts.length / SAND.CUTS },
   foam: { domain: FoamDomain, configs: FOAM_CONFIGS, make: (m, seed) => new FoamView(m, seed), progress: (m) => { const p = FoamDomain.progress(m); return p.done / p.total; } },
 };
@@ -1148,18 +1348,29 @@ readTheme();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
 new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-const rounds = {}, finished = new Set();
+const rounds = {}, finished = new Set(), history = {}, pickRng = mulberry32(20261018);
 let current = 'pop', roundCounter = 0, activePointer = null, brushEnergy = 0, lastFit = null, pendingTap = null;
 const env = makeEnv('toybox');
 paintMatcaps(LIGHTS.toybox);
 
-function newRound(id, cfgIndex) {
+// A Pop colourway: one bright palette and one colouring pattern. Cosmetic, never counted as a layout.
+const randomLook = () => ({ palette: POP_PALETTES[Math.floor(pickRng() * POP_PALETTES.length)], pattern: POP_PATTERNS[Math.floor(pickRng() * POP_PATTERNS.length)] });
+function newRound(id, cfgIndex, look = randomLook()) {
   const def = TOYS[id], old = rounds[id];
   if (old) old.view.dispose();
   const seed = (++roundCounter * 2654435761) >>> 0;
   const domain = def.domain.create(def.configs[cfgIndex], seed);
-  rounds[id] = { roundId: roundCounter, cfgIndex, domain, view: def.make(domain, seed), state: 'playing', t: 0 };
+  rounds[id] = { roundId: roundCounter, cfgIndex, look, domain, view: def.make(domain, seed, look), state: 'playing', t: 0 };
+  (history[id] = history[id] || []).push(cfgIndex);
+  if (history[id].length > 8) history[id].shift();
   if (id === current) showToy();
+}
+// Next: any layout of this toy not seen in the last few rounds.
+function pickNext(id) {
+  const n = TOYS[id].configs.length, recent = history[id] || [];
+  let k;
+  do k = Math.floor(pickRng() * n); while (n > recent.length + 1 && recent.includes(k));
+  return k;
 }
 
 function fitCamera(b) {
@@ -1242,8 +1453,7 @@ function cuePath() {
     const a = Math.min(...ts) - 0.5, b = Math.max(...ts) + 0.5;
     return [V(c[0] + p.shift[0] + m.u[0] * a, y, c[1] + p.shift[1] + m.u[1] * a), V(c[0] + p.shift[0] + m.u[0] * b, y, c[1] + p.shift[1] + m.u[1] * b)];
   }
-  const xs = m.poly.map(q => q[0]), zs = m.poly.map(q => q[1]), y = r.view.objTop + 0.25;
-  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  const [x0, z0, x1, z1] = m.box, y = r.view.objTop + 0.25;
   return [0.15, 0.38, 0.62, 0.85].map((f, i) => V(i % 2 ? x1 : x0, y, z0 + (z1 - z0) * f));
 }
 
@@ -1251,9 +1461,8 @@ function updateHUD() {
   const r = rounds[current], frac = TOYS[current].progress(r.domain);
   $('bar-fill').style.width = `${Math.min(100, frac * 100).toFixed(1)}%`;
   $('bar').setAttribute('aria-valuenow', Math.round(frac * 100));
-  const dots = $('dots');
-  if (dots.children.length !== TOYS[current].configs.length) dots.innerHTML = '<i></i>'.repeat(TOYS[current].configs.length);
-  [...dots.children].forEach((d, k) => { d.classList.toggle('on', k === r.cfgIndex); d.classList.toggle('done', finished.has(`${current}:${k}`)); });
+  const n = TOYS[current].configs.length, seen = [...finished].filter(k => k.startsWith(current + ':')).length;
+  $('explored-fill').style.width = `${(seen / n * 100).toFixed(2)}%`;
 }
 
 function showToy() {
@@ -1348,8 +1557,8 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { can
 
 /* controls */
 for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => switchToy(t.dataset.toy));
-const replay = () => { cancelGesture(); newRound(current, rounds[current].cfgIndex); };
-const nextLayout = () => { cancelGesture(); const r = rounds[current]; newRound(current, (r.cfgIndex + 1) % TOYS[current].configs.length); };
+const replay = () => { cancelGesture(); newRound(current, rounds[current].cfgIndex, rounds[current].look); };
+const nextLayout = () => { cancelGesture(); newRound(current, pickNext(current)); };
 $('reset').addEventListener('click', replay);
 $('replay').addEventListener('click', replay);
 $('next').addEventListener('click', nextLayout);
@@ -1374,9 +1583,10 @@ new ResizeObserver(() => {
 /* boot */
 const debug = location.hash === '#stats';
 $('stats').hidden = !debug;
-const feasible = sandFeasibility();
+const feasible = debug ? SAND_CONFIGS.filter(sandFeasible).length : 0;
 newRound('sand', 0); newRound('foam', 0);
-newRound('pop', 0);
+newRound('pop', 0, { palette: POP_PALETTES[0], pattern: 'rows' });
+if (debug) window.__dev = { newRound, rounds, TOYS, switchToy, POP_PALETTES, POP_PATTERNS }; // test hook, only with #stats
 
 /* the one shared frame loop */
 let last = performance.now(), firstFrame = 0, fpsT = 0, fpsN = 0, fps = 0;
@@ -1398,6 +1608,7 @@ function frame(now) {
   if (fpsT >= 0.5) {
     fps = Math.round(fpsN / fpsT); fpsN = 0; fpsT = 0;
     const info = renderer.info.render, lines = [`${fps} fps · ${info.calls} draws · ${(info.triangles / 1000).toFixed(0)}k tris`, `first frame ${Math.round(firstFrame)} ms`];
+    lines.push(`catalogue: pop ${POP_CONFIGS.length} layouts × ${POP_PALETTES.length * POP_PATTERNS.length} colourways · sand ${SAND_SHAPES.length} shapes, ${SAND_CONFIGS.length} configs · foam ${HIDDEN.length} toys, ${FOAM_CONFIGS.length} configs`);
     if (current === 'sand') lines.push(`sand kept ${(100 - SandDomain.materialError(r.domain) * 100).toFixed(3)}% · 6-cut check ${feasible}/${SAND_CONFIGS.length}`);
     $('stats').innerHTML = lines.join('<br>');
   }
