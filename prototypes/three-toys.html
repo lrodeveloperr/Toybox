@@ -1,8 +1,5 @@
 <title>Toybox 3D Prototypes</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=DM+Sans:opsz,wght@9..40,400;9..40,500&family=DM+Mono&display=swap">
 <style>
 /* Layout: one-screen toy app. Top bar picks the toy, a full-bleed 3D stage in the middle, bottom bar holds progress and round controls. */
 :root {
@@ -44,60 +41,53 @@ body {
 button { font: inherit; color: inherit; }
 button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
-.top { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; }
-.brand { display: flex; flex-direction: column; line-height: 1.1; }
-.brand b { font-family: var(--font-display); font-weight: 600; font-size: 21px; letter-spacing: .2px; }
-.brand span { font-size: 12px; color: var(--muted); letter-spacing: .4px; text-transform: uppercase; }
-.tabs { justify-self: center; display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
-.tab { appearance: none; border: 0; background: transparent; color: var(--muted); font-family: var(--font-display); font-weight: 600; font-size: 15px; padding: 9px 16px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tabs { display: flex; gap: 4px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
+.tab { appearance: none; border: 0; background: transparent; color: var(--muted); width: 58px; height: 42px; border-radius: 999px; cursor: pointer; display: grid; place-items: center; }
 .tab:hover { color: var(--ink); }
 .tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
-.icon-btn { appearance: none; width: 42px; height: 42px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: grid; place-items: center; }
-.icon-btn svg { width: 20px; height: 20px; stroke: var(--ink); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tab svg, .icon-btn svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.icon-btn { appearance: none; width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; display: grid; place-items: center; }
+.icon-btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.icon-btn.big { width: 64px; height: 64px; }
+.icon-btn.big svg { width: 30px; height: 30px; }
 
 #stage { position: relative; flex: 1; min-height: 0; border-radius: 20px; overflow: hidden; background: var(--scene); border: 1px solid var(--line); touch-action: none; }
-#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
-.chip { position: absolute; top: 12px; left: 12px; max-width: calc(100% - 24px); box-sizing: border-box; padding: 8px 14px; border-radius: 999px; background: color-mix(in srgb, var(--surface) 86%, transparent); border: 1px solid var(--line); font-size: 14px; pointer-events: none; transition: color .2s; }
-.chip.bad { color: var(--bad); }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+#gl { cursor: crosshair; }
+#cue { position: absolute; inset: 0; pointer-events: none; }
 .stats { position: absolute; right: 10px; bottom: 10px; padding: 4px 8px; border-radius: 8px; background: color-mix(in srgb, var(--surface) 82%, transparent); font: 11.5px/1.5 var(--font-mono); color: var(--muted); text-align: right; pointer-events: none; font-variant-numeric: tabular-nums; }
-.loading { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 17px; color: var(--muted); }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; }
+.spinner { width: 44px; height: 44px; border-radius: 50%; border: 5px solid var(--line); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
 .result { position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 30%, transparent); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 22px 24px; text-align: center; max-width: 320px; box-shadow: 0 14px 40px rgba(10, 14, 30, .22); display: grid; gap: 14px; }
-.card h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 24px; text-wrap: balance; }
-.card p { margin: 0; color: var(--muted); font-size: 14px; }
-.row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 26px; padding: 18px 28px 24px; box-shadow: 0 14px 40px rgba(10, 14, 30, .22); display: grid; gap: 12px; justify-items: center; }
+.burst { width: 120px; height: 120px; }
+.burst .rays { transform-origin: 60px 60px; animation: spin 8s linear infinite; }
+.burst .core { transform-origin: 60px 60px; animation: pop .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+.row { display: flex; gap: 14px; justify-content: center; }
 
-.bottom { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.progress { flex: 1 1 220px; min-width: 0; display: grid; gap: 6px; }
-.progress .labels { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
-.progress .labels span:last-child { color: var(--muted); text-align: right; }
-.bar { height: 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.bottom { display: flex; align-items: center; gap: 14px; }
+.progress { flex: 1; min-width: 0; display: grid; gap: 8px; }
+.bar { height: 12px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 999px; transition: width .18s ease-out; }
-.envs { display: flex; gap: 2px; padding: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
-.env { appearance: none; border: 0; background: transparent; color: var(--muted); font-family: var(--font-display); font-weight: 600; font-size: 14px; padding: 7px 12px 7px 8px; border-radius: 999px; display: flex; align-items: center; gap: 7px; cursor: pointer; }
-.env i { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
-.env:hover { color: var(--ink); }
-.env[aria-checked="true"] { background: var(--bg); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-.btn { appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-family: var(--font-display); font-weight: 600; font-size: 15px; padding: 10px 18px; border-radius: 999px; cursor: pointer; }
-.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.dots { display: flex; gap: 7px; }
+.dots i { width: 9px; height: 9px; border-radius: 50%; box-sizing: border-box; border: 1.5px solid var(--muted); opacity: .55; }
+.dots i.done { background: var(--muted); }
+.dots i.on { background: var(--accent); border-color: var(--accent); opacity: 1; }
 
-@media (max-width: 620px) {
-  .top { grid-template-columns: 1fr auto; }
-  .tabs { grid-column: 1 / -1; grid-row: 2; justify-self: stretch; }
-  .tab { flex: 1; padding: 9px 8px; font-size: 14px; }
-  .stats { font-size: 10.5px; }
-}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes pop { from { transform: scale(.2); } to { transform: scale(1); } }
 @media (prefers-reduced-motion: reduce) {
-  .bar i, .chip { transition: none; }
+  .bar i { transition: none; }
+  .burst .rays, .burst .core, .spinner { animation: none; }
 }
 </style>
 
 <header class="top">
-  <div class="brand"><b>Toybox</b><span>three.js prototype</span></div>
   <nav class="tabs" role="tablist" aria-label="Toys">
-    <button class="tab" role="tab" id="tab-pop" data-toy="pop" aria-selected="true">Pop Board</button>
-    <button class="tab" role="tab" id="tab-sand" data-toy="sand" aria-selected="false">Sand Slice</button>
-    <button class="tab" role="tab" id="tab-foam" data-toy="foam" aria-selected="false">Foam Reveal</button>
+    <button class="tab" role="tab" id="tab-pop" data-toy="pop" aria-selected="true" aria-label="Pop Board"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="9" cy="9" r="2.2"/><circle cx="15" cy="9" r="2.2"/><circle cx="9" cy="15" r="2.2"/><circle cx="15" cy="15" r="2.2"/></svg></button>
+    <button class="tab" role="tab" id="tab-sand" data-toy="sand" aria-selected="false" aria-label="Sand Slice"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="12" rx="2"/><path d="M3 12.5h18M3 16h18"/><path d="M13 3v18" stroke-dasharray="2 2.4"/></svg></button>
+    <button class="tab" role="tab" id="tab-foam" data-toy="foam" aria-selected="false" aria-label="Foam Reveal"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4.5"/><circle cx="15.5" cy="10" r="5"/><circle cx="17" cy="18.5" r="2.5"/><circle cx="6" cy="6.5" r="2"/></svg></button>
   </nav>
   <button class="icon-btn" id="mute" aria-label="Mute sound" aria-pressed="false">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="wave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path id="cross" d="M16 9l6 6M22 9l-6 6" hidden/></svg>
@@ -106,16 +96,26 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 <main id="stage" role="tabpanel" aria-labelledby="tab-pop">
   <canvas id="gl" aria-label="Toy play area"></canvas>
-  <div class="chip" id="chip" aria-live="polite">Press or sweep across the bubbles</div>
-  <div class="stats" id="stats"></div>
-  <div class="loading" id="loading">Loading three.js…</div>
+  <canvas id="cue" aria-hidden="true"></canvas>
+  <div class="stats" id="stats" hidden></div>
+  <div class="loading" id="loading" role="status" aria-label="Loading">
+    <div class="spinner" id="spinner"></div>
+    <button class="icon-btn big" id="retry" aria-label="Reload" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+  </div>
   <div class="result" id="result" hidden>
-    <div class="card" role="dialog" aria-labelledby="result-title">
-      <h2 id="result-title">Every bubble popped</h2>
-      <p id="result-sub">Replay this board or try the next layout.</p>
+    <div class="card" role="dialog" aria-label="Round complete">
+      <svg class="burst" viewBox="0 0 120 120" aria-hidden="true">
+        <g class="rays" fill="#FFE28A">
+          <path d="M60 4l5 22h-10zM60 116l-5-22h10zM4 60l22-5v10zM116 60l-22 5v-10zM20 20l18 12-6 6zM100 100l-18-12 6-6zM100 20l-12 18-6-6zM20 100l12-18 6 6z"/>
+        </g>
+        <g class="core">
+          <circle cx="60" cy="60" r="30" fill="#FFF3C4"/>
+          <path d="M60 36l7.1 14.5 16 2.3-11.6 11.3 2.7 15.9L60 72.5l-14.2 7.5 2.7-15.9-11.6-11.3 16-2.3z" fill="#FFC531" stroke="#F2A900" stroke-width="2" stroke-linejoin="round"/>
+        </g>
+      </svg>
       <div class="row">
-        <button class="btn" id="replay">Replay</button>
-        <button class="btn primary" id="next-result">Next</button>
+        <button class="icon-btn big" id="replay" aria-label="Replay"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+        <button class="icon-btn big primary" id="next-result" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
       </div>
     </div>
   </div>
@@ -123,27 +123,22 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 
 <footer class="bottom">
   <div class="progress">
-    <div class="labels"><span id="progress-text">Popped 0 of 48</span><span id="config-text">Grid · layout A</span></div>
     <div class="bar" role="progressbar" aria-label="Round progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="bar"><i id="bar-fill"></i></div>
-  </div>
-  <div class="envs" role="radiogroup" aria-label="Environment">
-    <button class="env" role="radio" data-env="toybox" aria-checked="true"><i style="background: linear-gradient(180deg, #FF7B6B 0 30%, #FFF4E4 30% 45%, #C4EBDD 45%)"></i>Toybox</button>
-    <button class="env" role="radio" data-env="shelf" aria-checked="false"><i style="background: linear-gradient(180deg, #FFE6A0 0 33%, #CDE5FF 33% 66%, #FFD2C2 66%)"></i>Collection</button>
-    <button class="env" role="radio" data-env="factory" aria-checked="false"><i style="background: radial-gradient(circle at 50% 45%, #FFFFFF 0 28%, #8EDBC9 30% 62%, #7CC6F7 64%)"></i>Factory</button>
+    <div class="dots" id="dots" aria-hidden="true"></div>
   </div>
   <div class="row">
-    <button class="btn" id="reset">Reset</button>
-    <button class="btn" id="next">Next layout</button>
+    <button class="icon-btn" id="reset" aria-label="Reset"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <button class="icon-btn" id="next" aria-label="Next layout"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l9 7-9 7z"/><path d="M18 5v14"/></svg></button>
   </div>
 </footer>
 
 <script>
-  // Shows a readable message if the three.js module never arrives.
+  // If the three.js module never arrives, swap the spinner for a reload button.
   setTimeout(function () {
-    if (!window.__toyboxBooted) {
-      var el = document.getElementById('loading');
-      if (el) el.textContent = "Couldn't load three.js from the CDN. Check your connection and reload.";
-    }
+    if (window.__toyboxBooted) return;
+    var sp = document.getElementById('spinner'), rt = document.getElementById('retry');
+    if (sp) sp.hidden = true;
+    if (rt) { rt.hidden = false; rt.onclick = function () { location.reload(); }; }
   }, 10000);
 </script>
 
@@ -311,7 +306,7 @@ const SandDomain = {
       const r = this.evaluate(m, m.gesture.a, m.gesture.b);
       m.gesture = null;
       if (r.ok) this.commit(m, r, ev);
-      else ev.push({ type: 'cut-rejected', reason: r.reason });
+      else ev.push({ type: 'cut-rejected', reason: r.reason, line: r.line });
     } else if (a.type === 'cancel') m.gesture = null; // an unfinished cut is discarded, never committed
     return ev;
   },
@@ -468,8 +463,6 @@ const FoamDomain = {
 // Matcaps carry the lighting. Each environment repaints them, so every toy picks up that set's light.
 const LIGHTS = {
   toybox: { key: '#FFFCF6', fill: '#9AA3BE', spec: '#FFFFFF', rim: ['#FFD2C8', 0.25] },
-  shelf: { key: '#FFFBF7', fill: '#A49AB2', spec: '#FFFFFF', rim: ['#FFE0CF', 0.25] },
-  factory: { key: '#FFFFFF', fill: '#968FC0', spec: '#FFFFFF', rim: ['#CFF3FF', 0.28] },
 };
 const MATCAP_SPECS = {
   plastic: { shade: 1, rim: 0.28, spec: 0.9, size: 0.17 },
@@ -699,6 +692,7 @@ class SandView extends BaseView {
     return mesh;
   }
   onEvent(e) {
+    if (e.type === 'cut-rejected') { this.flash = { line: e.line, t: 0 }; return; }
     if (e.type !== 'cut-committed') return;
     const old = this.meshes[e.idx], from = [old.position.x, old.position.z];
     this.root.remove(old); old.geometry.dispose();
@@ -742,7 +736,19 @@ class SandView extends BaseView {
       const targetY = r.ok ? this.surfaceY - 0.35 : this.surfaceY + 0.35;
       this.knifeY += (targetY - this.knifeY) * (1 - Math.exp(-dt * 14));
       this.knife.position.y = this.knifeY;
-    } else { this.line.visible = false; this.knife.visible = false; this.knifeY = this.surfaceY + 0.5; }
+    } else {
+      this.knife.visible = false; this.knifeY = this.surfaceY + 0.5;
+      const f = this.flash;
+      if (f && f.t < 0.7) {
+        f.t += dt;
+        const { from, to } = f.line, len = Math.hypot(to[0] - from[0], to[1] - from[1]);
+        this.line.visible = len > 0.05;
+        this.line.position.set((from[0] + to[0]) / 2, this.surfaceY + 0.02, (from[1] + to[1]) / 2);
+        this.line.rotation.y = -Math.atan2(to[1] - from[1], to[0] - from[0]);
+        this.line.scale.x = Math.max(0.01, len);
+        this.lineMat.color.copy(COLORS.bad); this.lineMat.opacity = 0.9 * (1 - f.t / 0.7);
+      } else { this.line.visible = false; this.lineMat.opacity = 0.9; }
+    }
     let live = false;
     for (let i = 0; i < this.gl.length; i++) {
       if (this.gl[i] <= 0) continue;
@@ -898,7 +904,6 @@ function setRoom(e, floor, wall, top) {
   const u = e.room.material.uniforms; u.uFloor.value.set(floor); u.uWall.value.set(wall); u.uTop.value.set(top); ENV_BG.set(top);
 }
 
-const UV_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
 // Toybox: an open box with three compartments, one per toy. The lid shows the game's name.
 function feltTexture(hex) {
   const s = 128, c = document.createElement('canvas'); c.width = c.height = s;
@@ -912,20 +917,26 @@ function star(g, x, y, r, col) {
   for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); }
   g.closePath(); g.fill();
 }
-function labelTexture(text, { w = 1024, h = 256, bg = '#FFF6E8', fg = '#FF6B5B', deco = ['#FFC94A', '#7ED9C9', '#B9A3FF'] } = {}) {
-  const c = document.createElement('canvas'); c.width = w; c.height = h;
-  const g = c.getContext('2d'), tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
-  const draw = () => {
-    g.clearRect(0, 0, w, h);
-    g.fillStyle = bg; g.beginPath(); g.roundRect ? g.roundRect(0, 0, w, h, h * 0.22) : g.rect(0, 0, w, h); g.fill();
-    g.fillStyle = fg; g.font = `600 ${Math.round(h * 0.58)}px Fredoka, ui-rounded, "Segoe UI", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(text, w / 2, h * 0.55);
-    deco.forEach((col, i) => { star(g, w * (0.07 + i * 0.012), h * (0.3 + i * 0.22), h * 0.11, col); star(g, w * (0.93 - i * 0.012), h * (0.7 - i * 0.22), h * 0.11, col); });
-    tex.needsUpdate = true;
-  };
-  draw();
-  if (document.fonts) document.fonts.load(`600 40px Fredoka`).then(draw, () => {});
-  return tex;
+// The lid's emblem: the three toys drawn as pictures, no lettering.
+function emblemTexture() {
+  const w = 1024, h = 300, c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'), cy = h / 2, s = h * 0.3;
+  g.fillStyle = '#FFF6E8'; g.beginPath(); g.roundRect ? g.roundRect(0, 0, w, h, h * 0.22) : g.rect(0, 0, w, h); g.fill();
+  const rr = (x, y, rw, rh, r, col) => { g.fillStyle = col; g.beginPath(); g.roundRect ? g.roundRect(x, y, rw, rh, r) : g.rect(x, y, rw, rh); g.fill(); };
+  let x = w * 0.25;
+  rr(x - s, cy - s * 0.8, 2 * s, 1.6 * s, s * 0.35, '#3B4272');
+  ['#FF6B8B', '#FFD45A', '#5AC8FA', '#7BD88F', '#A08CFF', '#FF9F5A'].forEach((col, i) => { g.fillStyle = col; g.beginPath(); g.arc(x + ((i % 3) - 1) * s * 0.62, cy + (Math.floor(i / 3) - 0.5) * s * 0.7, s * 0.24, 0, Math.PI * 2); g.fill(); });
+  x = w * 0.5;
+  ['#F6B4C8', '#FBE2B0', '#B8E2CC', '#C7BFF2'].forEach((col, i) => rr(x - s * 1.05, cy - s * 0.8 + i * s * 0.4, s * 2.1, s * 0.42, s * 0.12, col));
+  g.strokeStyle = '#FFFFFF'; g.lineWidth = s * 0.09; g.setLineDash([s * 0.16, s * 0.12]); g.beginPath(); g.moveTo(x + s * 0.2, cy - s * 1.05); g.lineTo(x + s * 0.2, cy + s * 1.05); g.stroke(); g.setLineDash([]);
+  x = w * 0.75;
+  star(g, x + s * 0.1, cy + s * 0.15, s * 0.7, '#FFC531');
+  [[-0.7, -0.35, 0.42], [-0.1, -0.6, 0.36], [0.55, -0.3, 0.4], [-0.75, 0.45, 0.34], [0.75, 0.55, 0.3]].forEach(([dx, dy, r]) => {
+    g.fillStyle = 'rgba(255,255,255,0.95)'; g.strokeStyle = '#BFD8EE'; g.lineWidth = s * 0.06;
+    g.beginPath(); g.arc(x + dx * s, cy + dy * s, r * s, 0, Math.PI * 2); g.fill(); g.stroke();
+  });
+  [[0.06, 0.25, '#FFC94A'], [0.94, 0.75, '#7ED9C9'], [0.375, 0.2, '#B9A3FF'], [0.625, 0.8, '#FF8FB1']].forEach(([fx, fy, col]) => star(g, w * fx, h * fy, h * 0.08, col));
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
 // A small, recognisable model of any toy configuration, about one unit across, standing on y = 0.
 function miniToy(toy, idx, ghost) {
@@ -954,223 +965,96 @@ function miniToy(toy, idx, ghost) {
 const TOY_ORDER = ['pop', 'sand', 'foam'];
 function disposeTree(o) { o.traverse(n => { if (n.geometry && n.geometry !== SHARED.dome) n.geometry.dispose(); }); }
 
+// Where the compartments go. Landscape: waiting toys either side. Portrait: a row of two in front, so phones always see them.
+function toyboxLayout(w, d, portrait) {
+  const T = 0.45, t = 0.28, cw = 2 * w + 1.0, cd = 2 * d + 1.0;
+  if (!portrait) {
+    const sw = Math.max(3.4, cw * 0.42), IW = 2 * sw + cw + 2 * t;
+    return {
+      T, t, cw, cd, x0: -IW / 2, x1: IW / 2, z0: -cd / 2, z1: cd / 2,
+      cells: [{ x: -(cw / 2 + t + sw / 2), z: 0, w: sw, d: cd }, { x: cw / 2 + t + sw / 2, z: 0, w: sw, d: cd }],
+      dividers: [{ x: -(cw / 2 + t / 2), z: 0, w: t, d: cd, h: 1.05 }, { x: cw / 2 + t / 2, z: 0, w: t, d: cd, h: 1.05 }],
+    };
+  }
+  const sd = Math.max(3.2, cw * 0.42), half = (cw - t) / 2, zf = cd / 2 + t;
+  return {
+    T, t, cw, cd, x0: -cw / 2, x1: cw / 2, z0: -cd / 2, z1: zf + sd,
+    cells: [{ x: -(half / 2 + t / 2), z: zf + sd / 2, w: half, d: sd }, { x: half / 2 + t / 2, z: zf + sd / 2, w: half, d: sd }],
+    dividers: [{ x: 0, z: cd / 2 + t / 2, w: cw, d: t, h: 0.45 }, { x: 0, z: zf + sd / 2, w: t, d: sd, h: 0.8 }],
+  };
+}
 function buildToybox(e) {
-  const YB = -0.7;
+  const YB = -0.7, HW = 1.4, HF = 0.38, LEAN = 0.22;
   e.tilt = [52, 62]; e.gap = 6;
   e.room = makeRoom({ Rc: 7, blend: 5, rise: 16, floor: '#DDF0FF', wall: '#E8F5FF', top: '#F6FBFF', glow: 0.3 });
   e.room.position.y = YB - 0.01; e.room.material.uniforms.uY0.value = YB - 0.01;
   setRoom(e, '#DDF0FF', '#E8F5FF', '#F6FBFF');
   const wallMat = mm('#FFF4E4'), trimMat = mm('#FF7B6B'), bodyMat = mm('#FF8C7A');
   const felt = { center: mm('#C4EBDD', MATCAP.matte, { map: feltTexture('#FFFFFF') }), side: mm('#FFD9E6', MATCAP.matte, { map: feltTexture('#FFFFFF') }) };
-  const label = labelTexture('TOYBOX');
+  const emblem = emblemTexture();
+  const plateSize = (OW, portrait) => { const pw = Math.min(OW * (portrait ? 0.85 : 0.55), 11); return [pw, pw * 300 / 1024]; };
   let box = null;
   e.place = (w, d, zc, toy) => {
-    e.room.position.z = -(2 * d + 1.9) / 2 - 3;
-    const key = `${w.toFixed(2)}:${d.toFixed(2)}:${toy}:${TOY_ORDER.map(t => rounds[t] ? rounds[t].cfgIndex : 0).join()}`;
+    const portrait = e.portrait, L = toyboxLayout(w, d, portrait), { T, cw, cd } = L;
+    const OW = L.x1 - L.x0 + 2 * T, OD = L.z1 - L.z0 + 2 * T, cz = (L.z0 + L.z1) / 2, back = L.z0 - T;
+    e.room.position.z = back - 3;
+    const key = `${portrait}:${w.toFixed(2)}:${d.toFixed(2)}:${toy}:${TOY_ORDER.map(t => rounds[t] ? rounds[t].cfgIndex : 0).join()}`;
     if (box && box.key === key) return;
     if (box) { e.group.remove(box.grp); disposeTree(box.grp); }
-    const grp = new THREE.Group(), T = 0.45, t = 0.28, HW = 1.4, HF = 0.38, HD = 1.05;
-    const cw = 2 * w + 1.0, cd = 2 * d + 1.0, sw = Math.max(3.4, cw * 0.42), IW = 2 * sw + cw + 2 * t, OW = IW + 2 * T, OD = cd + 2 * T;
+    const grp = new THREE.Group(), pickables = [];
     const block = (bw, bh, bd, x, y, z, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat); m.position.set(x, y + bh / 2, z); grp.add(m); return m; };
-    block(OW, -YB - 0.02, OD, 0, YB, 0, bodyMat);
-    const feltPlane = (fw, x, mat) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(fw, cd).rotateX(-Math.PI / 2), mat); p.position.set(x, -0.005, 0); grp.add(p); };
-    feltPlane(cw, 0, felt.center); feltPlane(sw, -(cw / 2 + t + sw / 2), felt.side); feltPlane(sw, cw / 2 + t + sw / 2, felt.side);
-    block(OW, HF - YB, T, 0, YB, OD / 2 - T / 2, wallMat);
-    block(OW, HW - YB, T, 0, YB, -OD / 2 + T / 2, wallMat);
+    const feltPlane = (fw, fd, x, z, mat) => { const p = new THREE.Mesh(new THREE.PlaneGeometry(fw, fd).rotateX(-Math.PI / 2), mat); p.position.set(x, -0.005, z); grp.add(p); return p; };
+    block(OW, -YB - 0.02, OD, 0, YB, cz, bodyMat);
+    feltPlane(cw, cd, 0, 0, felt.center);
+    block(OW, HW - YB, T, 0, YB, back + T / 2, wallMat);
+    block(OW + 0.08, 0.12, T + 0.08, 0, HW, back + T / 2, trimMat);
+    block(OW, HF - YB, T, 0, YB, L.z1 + T / 2, wallMat);
+    block(OW + 0.08, 0.12, T + 0.08, 0, HF, L.z1 + T / 2, trimMat);
     for (const s of [-1, 1]) {
-      block(T, HW - YB, OD - 2 * T, s * (OW / 2 - T / 2), YB, 0, wallMat);
-      block(t, HD, cd, s * (cw / 2 + t / 2), 0, 0, wallMat);
-      block(t + 0.08, 0.1, cd, s * (cw / 2 + t / 2), HD, 0, trimMat);
-      block(T + 0.08, 0.12, OD - 2 * T, s * (OW / 2 - T / 2), HW, 0, trimMat);
+      const x = s > 0 ? L.x1 + T / 2 : L.x0 - T / 2;
+      block(T, HW - YB, L.z1 - L.z0, x, YB, cz, wallMat);
+      block(T + 0.08, 0.12, L.z1 - L.z0, x, HW, cz, trimMat);
     }
-    block(OW + 0.08, 0.12, T + 0.08, 0, HF, OD / 2 - T / 2, trimMat);
-    block(OW + 0.08, 0.12, T + 0.08, 0, HW, -OD / 2 + T / 2, trimMat);
-    const hinge = new THREE.Group(); hinge.position.set(0, HW + 0.12, -OD / 2); hinge.rotation.x = -0.22;
-    const lid = new THREE.Mesh(new THREE.BoxGeometry(OW, OD, 0.3), trimMat); lid.position.set(0, OD / 2, -0.15); hinge.add(lid);
-    const plateW = Math.min(OW * 0.55, 11), plate = new THREE.Mesh(new THREE.PlaneGeometry(plateW, plateW / 4), new THREE.MeshBasicMaterial({ map: label, transparent: true }));
-    plate.position.set(0, plateW / 8 + 0.5, 0.02); hinge.add(plate);
+    for (const dv of L.dividers) { block(dv.w, dv.h, dv.d, dv.x, 0, dv.z, wallMat); block(dv.w + 0.08, 0.1, dv.d + 0.08, dv.x, dv.h, dv.z, trimMat); }
+    const hinge = new THREE.Group(); hinge.position.set(0, HW + 0.12, back); hinge.rotation.x = -LEAN;
+    const lidL = Math.min(OD, 10), lid = new THREE.Mesh(new THREE.BoxGeometry(OW, lidL, 0.3), trimMat); lid.position.set(0, lidL / 2, -0.15); hinge.add(lid);
+    const [pw, ph] = plateSize(OW, portrait), plate = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: emblem, transparent: true }));
+    plate.position.set(0, ph / 2 + 0.5, 0.02); hinge.add(plate);
     grp.add(hinge);
     const i = TOY_ORDER.indexOf(toy), neighbours = [TOY_ORDER[(i + 2) % 3], TOY_ORDER[(i + 1) % 3]];
     neighbours.forEach((nt, k) => {
+      const c = L.cells[k], p = feltPlane(c.w, c.d, c.x, c.z, felt.side);
       const mini = miniToy(nt, rounds[nt] ? rounds[nt].cfgIndex : 0);
-      mini.scale.setScalar(Math.min(sw, cd) * 0.62);
-      mini.position.set((k ? 1 : -1) * (cw / 2 + t + sw / 2), 0, 0);
-      mini.rotation.y = (k ? -1 : 1) * 0.25;
+      mini.scale.setScalar(Math.min(c.w, c.d) * 0.62);
+      mini.position.set(c.x, 0, c.z); mini.rotation.y = (k ? -1 : 1) * 0.25;
+      p.userData.toy = mini.userData.toy = nt; pickables.push(p, mini);
       grp.add(mini);
     });
     e.group.add(grp);
-    box = { key, grp };
+    box = { key, grp, pickables };
   };
-  e.extras = (w, d) => { const OD = 2 * d + 1.9; return [[0, 1.6 + 0.8, -OD / 2 - 0.4], [0, YB, OD / 2]]; };
-}
-
-// Collection: a 24-cubby shelf, one cubby per layout. Finishing a round puts its trophy on the shelf.
-const COLLECT_KEY = 'toybox-collected';
-function loadCollected() { try { return new Set(JSON.parse(localStorage.getItem(COLLECT_KEY) || '[]')); } catch { return new Set(); } }
-function buildShelf(e) {
-  e.tilt = [36, 48]; e.gap = 1.1;
-  e.room = makeRoom({ Rc: 0.12, blend: 0.04, rise: 10, floor: '#FBF8F4', wall: '#FFE9DC', top: '#FFF4EC', glow: 0.25 });
-  setRoom(e, '#FBF8F4', '#FFE9DC', '#FFF4EC');
-  const collected = loadCollected(), ghostMat = new THREE.MeshBasicMaterial({ color: '#FFFFFF', transparent: true, opacity: 0.55, depthWrite: false });
-  const rowColors = { pop: '#FFE6A0', sand: '#CDE5FF', foam: '#FFD2C2' }, frameMat = mm('#FFFFFF');
-  const hiMat = new THREE.MeshBasicMaterial({ color: COLORS.accent });
-  let shelf = null;
-  const popIns = [];
-  const cellPos = (s, toy, k) => [s.x0 + (k + 0.5) * s.c, s.y0 + (2 - TOY_ORDER.indexOf(toy)) * s.c + 0.06, s.z];
-  const putItem = (s, toy, k, animate) => {
-    const key = `${toy}:${k}`, old = s.items[key];
-    if (old) { s.grp.remove(old); disposeTree(old); }
-    const have = collected.has(key), item = miniToy(toy, k, have ? null : ghostMat), [x, y, z] = cellPos(s, toy, k);
-    item.position.set(x, y, z); item.rotation.set(0.35, -0.3, 0);
-    item.userData.size = s.c * (have ? 0.66 : 0.56);
-    item.scale.setScalar(animate ? 0.001 : item.userData.size);
-    if (animate) popIns.push({ item, t: 0 });
-    s.grp.add(item); s.items[key] = item;
+  e.extras = (w, d, zc, portrait) => {
+    const L = toyboxLayout(w, d, portrait), OW = L.x1 - L.x0 + 2 * L.T, back = L.z0 - L.T;
+    const up = 0.5 + plateSize(OW, portrait)[1];
+    return [[0, HW + 0.12 + up * Math.cos(LEAN), back - up * Math.sin(LEAN)], [0, YB, L.z1 + L.T]];
   };
-  e.place = (w, d, zc, toy, cfg) => {
-    const c = Math.min(1.25, Math.max(0.85, (2 * w + 0.6) / 8));
-    const key = c.toFixed(3) + zc.toFixed(2);
-    if (!shelf || shelf.key !== key) {
-      if (shelf) { e.group.remove(shelf.grp); disposeTree(shelf.grp); }
-      const grp = new THREE.Group(), W = 8 * c, H = 3 * c, D = 0.8, t = 0.08, y0 = 0.5, z = zc + D / 2;
-      const s = { key, grp, c, x0: -W / 2, y0, z, items: {} };
-      const block = (bw, bh, bd, x, y, zz, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat); m.position.set(x, y, zz); grp.add(m); };
-      TOY_ORDER.forEach((tt, r) => block(W, c, 0.05, 0, y0 + (2 - r + 0.5) * c, zc + 0.03, new THREE.MeshBasicMaterial({ color: rowColors[tt] })));
-      for (let r = 0; r <= 3; r++) block(W + t, t, D, 0, y0 + r * c, z, frameMat);
-      for (let k = 0; k <= 8; k++) block(t, H + t, D, -W / 2 + k * c, y0 + H / 2, z, frameMat);
-      s.hi = new THREE.Group();
-      for (const [bw, bh, x, y] of [[c, 0.05, 0, c / 2], [c, 0.05, 0, -c / 2], [0.05, c, -c / 2, 0], [0.05, c, c / 2, 0]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.05), hiMat); m.position.set(x, y, 0); s.hi.add(m); }
-      grp.add(s.hi);
-      TOY_ORDER.forEach(tt => { for (let k = 0; k < 8; k++) putItem(s, tt, k, false); });
-      e.group.add(grp); shelf = s;
-    }
-    const [x, y] = cellPos(shelf, toy, cfg || 0);
-    shelf.hi.position.set(x, y - 0.06 + shelf.c / 2, shelf.z + 0.42);
-  };
-  e.extras = (w, d, zc) => { const c = Math.min(1.25, Math.max(0.85, (2 * w + 0.6) / 8)); return [[-4 * c, 0.5 + 3 * c + 0.1, zc], [4 * c, 0.5 + 3 * c + 0.1, zc]]; };
-  e.onComplete = (toy, k) => {
-    const key = `${toy}:${k}`;
-    if (collected.has(key)) return;
-    collected.add(key);
-    try { localStorage.setItem(COLLECT_KEY, JSON.stringify([...collected])); } catch {}
-    if (shelf) putItem(shelf, toy, k, true);
-  };
-  e.update = (dt, t) => {
-    if (shelf) shelf.hi.scale.setScalar(reduceMotion.matches ? 1 : 1 + 0.04 * Math.sin(t * 3));
-    for (let i = popIns.length - 1; i >= 0; i--) {
-      const p = popIns[i]; p.t += dt;
-      const k = Math.min(1, p.t / 0.6);
-      p.item.scale.setScalar(p.item.userData.size * Math.max(0.001, easeOutBack(k)));
-      if (k >= 1) popIns.splice(i, 1);
-    }
+  e.pick = (raycaster) => {
+    if (!box) return null;
+    const hit = raycaster.intersectObjects(box.pickables, true)[0];
+    let o = hit && hit.object;
+    while (o && !o.userData.toy) o = o.parent;
+    return o ? o.userData.toy : null;
   };
 }
 
-// Factory: the toy arrives on a conveyor; the machine's gauge tracks progress and its lamp turns green at the end.
-const BELT_FS = `uniform float uOffset; uniform vec3 uA, uB; varying vec2 vUv; uniform vec2 uSize;
-void main() {
-  float x = vUv.x * uSize.x - uOffset;
-  float rib = smoothstep(0.0, 0.06, abs(fract(x / 0.6) - 0.5) - 0.38);
-  vec3 c = mix(uB, uA, rib);
-  c *= 0.94 + 0.06 * smoothstep(0.0, 0.08, min(vUv.y, 1.0 - vUv.y) * uSize.y);
-  gl_FragColor = vec4(c, 1.0);
-  #include <colorspace_fragment>
-}`;
-function dialTexture() {
-  const s = 256, c = document.createElement('canvas'); c.width = c.height = s;
-  const g = c.getContext('2d'), cx = s / 2, cy = s / 2;
-  g.fillStyle = '#FFFFFF'; g.beginPath(); g.arc(cx, cy, s / 2, 0, Math.PI * 2); g.fill();
-  const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25, seg = 40;
-  for (let i = 0; i < seg; i++) {
-    const f = i / seg; g.strokeStyle = `hsl(${Math.round(8 + f * 132)},85%,62%)`; g.lineWidth = 22;
-    g.beginPath(); g.arc(cx, cy, s * 0.36, a0 + (a1 - a0) * f, a0 + (a1 - a0) * (f + 1 / seg) + 0.01); g.stroke();
-  }
-  g.strokeStyle = '#2B3050'; g.lineWidth = 4;
-  for (let i = 0; i <= 10; i++) { const a = a0 + (a1 - a0) * i / 10; g.beginPath(); g.moveTo(cx + Math.cos(a) * s * 0.44, cy + Math.sin(a) * s * 0.44); g.lineTo(cx + Math.cos(a) * s * 0.48, cy + Math.sin(a) * s * 0.48); g.stroke(); }
-  star(g, cx, cy + s * 0.22, s * 0.07, '#FFC94A');
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-}
-function buildFactory(e) {
-  const Y0 = -1.5;
-  e.tilt = [42, 54]; e.gap = 4;
-  e.room = makeRoom({ Rc: 5, blend: 3.5, rise: 16, floor: '#F2EEFF', wall: '#E9E3FF', top: '#F7F5FF', glow: 0.3 });
-  e.room.position.y = Y0; e.room.material.uniforms.uY0.value = Y0;
-  setRoom(e, '#F2EEFF', '#E9E3FF', '#F7F5FF');
-  const beltMat = new THREE.ShaderMaterial({ vertexShader: UV_VS, fragmentShader: BELT_FS, uniforms: { uOffset: { value: 0 }, uA: { value: C('#EEF2F8') }, uB: { value: C('#D3DAE6') }, uSize: { value: new THREE.Vector2(60, 8) } } });
-  const lampMat = new THREE.MeshBasicMaterial({ color: '#FFB347' }), needleMat = mm('#2B3050');
-  let rig = null, progress = 0, shown = 0, delivery = null, done = false;
-  e.place = (w, d) => {
-    const key = `${w.toFixed(2)}:${d.toFixed(2)}`;
-    if (rig && rig.key === key) return;
-    if (rig) { e.group.remove(rig.grp); disposeTree(rig.grp); }
-    const grp = new THREE.Group(), bd = 2 * d + 1.4, L = 60;
-    const block = (bw, bh, bdp, x, y, z, mat) => { const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bdp), mat); m.position.set(x, y + bh / 2, z); grp.add(m); return m; };
-    block(L, -Y0 - 0.02, bd + 0.5, 0, Y0, 0, mm('#7CC6F7'));
-    const belt = new THREE.Mesh(new THREE.PlaneGeometry(L, bd).rotateX(-Math.PI / 2), beltMat); belt.position.y = -0.006; grp.add(belt);
-    beltMat.uniforms.uSize.value.set(L, bd);
-    const railMat = mm('#FFD45E');
-    for (const s of [-1, 1]) block(L, 0.24, 0.26, 0, -0.02, s * (bd / 2 + 0.13), railMat);
-    const bolts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.07, 0.07, 0.05, 12).rotateX(Math.PI / 2), mm('#C9A23E', MATCAP.metal), 40), mtx = new THREE.Matrix4();
-    for (let i = 0; i < 40; i++) bolts.setMatrixAt(i, mtx.makeTranslation(-L / 2 + (i + 0.5) * L / 40, 0.11, bd / 2 + 0.27));
-    grp.add(bolts);
-    const mz = -(bd / 2 + 0.26 + 1.5), mx = -w * 0.42, MH = 4.4;
-    const body = new THREE.Mesh(slab(roundRectShape(3.6, 2.6, 0.6), MH, 0.12), mm('#8EDBC9')); body.position.set(mx, Y0, mz); grp.add(body);
-    const front = mz + 1.3 + 0.12, gy = Y0 + MH * 0.62;
-    const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.98, 0.98, 0.18, 48).rotateX(Math.PI / 2), mm('#FFFFFF', MATCAP.metal)); bezel.position.set(mx, gy, front + 0.08); grp.add(bezel);
-    const dial = new THREE.Mesh(new THREE.CircleGeometry(0.86, 48), new THREE.MeshBasicMaterial({ map: dialTexture() })); dial.position.set(mx, gy, front + 0.18); grp.add(dial);
-    const needle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.7, 0.03).translate(0, 0.3, 0), needleMat); needle.position.set(mx, gy, front + 0.21); grp.add(needle);
-    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 20).rotateX(Math.PI / 2), needleMat); hub.position.set(mx, gy, front + 0.22); grp.add(hub);
-    const plate = new THREE.Mesh(new THREE.PlaneGeometry(3.0, 0.75), new THREE.MeshBasicMaterial({ map: labelTexture('TOY FACTORY', { bg: '#FFFFFF', fg: '#5B4BD6' }), transparent: true }));
-    plate.position.set(mx, Y0 + MH * 0.9, front + 0.02); grp.add(plate);
-    const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.34, 28, 18), lampMat); lamp.position.set(mx + 1.2, Y0 + MH + 0.55, mz); grp.add(lamp);
-    block(0.5, 0.35, 0.5, mx + 1.2, Y0 + MH + 0.1, mz, mm('#FFFFFF'));
-    const hopper = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.45, 1.0, 36, 1, true), mm('#FFC94A', MATCAP.plastic, { side: THREE.DoubleSide })); hopper.position.set(mx - 0.4, Y0 + MH + 0.7, mz); grp.add(hopper);
-    const pipe = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([
-      new THREE.Vector3(mx - 1.8, Y0 + MH * 0.5, mz), new THREE.Vector3(mx - 2.8, Y0 + MH * 0.45, mz + 0.2),
-      new THREE.Vector3(-w - 2.2, 1.6, -bd / 2 + 0.3), new THREE.Vector3(-w - 1.4, 0.9, -bd / 2 + 0.9)]), 40, 0.32, 16), mm('#FF8FB1'));
-    grp.add(pipe);
-    const crate = new THREE.Group(), cm = mm('#FFB86B');
-    for (const [bw, bh, bdp, x, y, z] of [[2.4, 0.12, 2.0, 0, 0, 0], [2.4, 1.3, 0.12, 0, 0, -0.94], [2.4, 1.3, 0.12, 0, 0, 0.94], [0.12, 1.3, 2.0, -1.14, 0, 0], [0.12, 1.3, 2.0, 1.14, 0, 0]]) {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bdp), cm); m.position.set(x, y + bh / 2, z); crate.add(m);
-    }
-    for (let i = 0; i < 3; i++) { const mini = miniToy(TOY_ORDER[i], i * 2); mini.scale.setScalar(0.85); mini.position.set(-0.6 + i * 0.6, 1.0 + (i % 2) * 0.15, (i - 1) * 0.3); mini.rotation.set(0.4, i, 0.2); crate.add(mini); }
-    crate.position.set(w * 0.62, Y0, mz + 0.4); grp.add(crate);
-    e.group.add(grp);
-    rig = { key, grp, needle, lamp };
-  };
-  e.extras = (w, d) => { const bd = 2 * d + 1.4, mz = -(bd / 2 + 0.26 + 1.5); return [[-w * 0.42, Y0 + 4.4 * 0.62 + 1.0, mz + 1.4], [w * 0.62, Y0 + 1.6, mz]]; };
-  e.onProgress = (f) => { progress = f; };
-  e.onComplete = () => { done = true; };
-  e.onShow = (round) => {
-    done = round.state !== 'playing';
-    if (reduceMotion.matches) return;
-    delivery = { root: round.view.root, start: performance.now(), from: -(round.view.bounds.w + 8) };
-    e.busy = true;
-  };
-  e.update = (dt, t) => {
-    if (!rig) return;
-    shown += (progress - shown) * Math.min(1, dt * 6);
-    rig.needle.rotation.z = 2.36 - shown * 4.72;
-    lampMat.color.set(done ? '#4CD97B' : '#FFB347');
-    rig.lamp.scale.setScalar(done && !reduceMotion.matches ? 1 + 0.12 * Math.sin(t * 6) : 1);
-    if (delivery) {
-      const k = Math.min(1, (performance.now() - delivery.start) / 900), x = delivery.from * (1 - easeInOut(k)), yaw = e.group.rotation.y;
-      const prev = delivery.x ?? delivery.from;
-      delivery.root.position.set(x * Math.cos(yaw), 0, -x * Math.sin(yaw));
-      beltMat.uniforms.uOffset.value += x - prev; delivery.x = x;
-      if (k >= 1) { delivery.root.position.set(0, 0, 0); delivery = null; e.busy = false; }
-    }
-  };
-}
-
-const ENVS = { toybox: buildToybox, shelf: buildShelf, factory: buildFactory };
+const ENVS = { toybox: buildToybox };
 
 function makeEnv(id) {
   const e = { group: new THREE.Group(), place() {}, update() {}, gap: 2 };
   ENVS[id](e);
   e.group.add(e.room);
-  e.fit = (b, yaw) => {
-    e.group.rotation.y = yaw;
+  e.fit = (b, yaw, portrait) => {
+    e.group.rotation.y = yaw; e.portrait = portrait;
     const w = (yaw ? b.d : b.w) / 2, d = (yaw ? b.w : b.d) / 2, zc = -(d + e.gap);
     e.room.position.z = zc;
     e.room.material.uniforms.uRot.value.set(Math.cos(yaw), Math.sin(yaw));
@@ -1243,26 +1127,10 @@ const Sound = {
 
 /* ───────────── application ───────────── */
 const TOYS = {
-  pop: {
-    domain: PopDomain, configs: POP_CONFIGS, make: (m) => new PopView(m),
-    hint: () => 'Press or sweep across the bubbles',
-    progress: (m) => [`Popped ${m.done} of ${m.bubbles.length}`, m.done / m.bubbles.length],
-    result: () => ['Every bubble popped', 'Replay this board or try the next layout.'],
-  },
-  sand: {
-    domain: SandDomain, configs: SAND_CONFIGS, make: (m) => new SandView(m),
-    hint: (m) => `Drag the knife ${directionWords(m)} through the sand`,
-    progress: (m) => [`Cuts ${m.cuts.length} of ${SAND.CUTS}`, m.cuts.length / SAND.CUTS],
-    result: () => ['Six clean slices', 'Every cut kept the full amount of sand.'],
-  },
-  foam: {
-    domain: FoamDomain, configs: FOAM_CONFIGS, make: (m, seed) => new FoamView(m, seed),
-    hint: () => 'Wipe the foam to find what is hidden',
-    progress: (m) => { const p = FoamDomain.progress(m), f = p.done / p.total; return [`Foam cleared ${Math.floor(f * 100)}% · done at 97%`, f]; },
-    result: (m) => [`You found the ${m.cfg.obj.name}`, 'Replay it or reveal the next object.'],
-  },
+  pop: { domain: PopDomain, configs: POP_CONFIGS, make: (m) => new PopView(m), progress: (m) => m.done / m.bubbles.length },
+  sand: { domain: SandDomain, configs: SAND_CONFIGS, make: (m) => new SandView(m), progress: (m) => m.cuts.length / SAND.CUTS },
+  foam: { domain: FoamDomain, configs: FOAM_CONFIGS, make: (m, seed) => new FoamView(m, seed), progress: (m) => { const p = FoamDomain.progress(m); return p.done / p.total; } },
 };
-const REJECT = { short: 'Drag the knife all the way across the block', direction: null, thin: 'That slice is too thin. Leave a little more space.', miss: 'Start the cut over the sand', done: 'All six cuts are made' };
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl'), stage = $('stage');
@@ -1280,10 +1148,10 @@ readTheme();
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
 new MutationObserver(readTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-const rounds = {};
-let current = 'pop', roundCounter = 0, activePointer = null, chipTimer = 0, brushEnergy = 0;
-let env = null, envId = 'toybox', lastFit = null;
-const envCache = {};
+const rounds = {}, finished = new Set();
+let current = 'pop', roundCounter = 0, activePointer = null, brushEnergy = 0, lastFit = null, pendingTap = null;
+const env = makeEnv('toybox');
+paintMatcaps(LIGHTS.toybox);
 
 function newRound(id, cfgIndex) {
   const def = TOYS[id], old = rounds[id];
@@ -1297,15 +1165,14 @@ function newRound(id, cfgIndex) {
 function fitCamera(b) {
   const aspect = camera.aspect, portrait = aspect < 0.9;
   const yaw = portrait && b.w > b.d * 1.15 ? Math.PI / 2 : 0;
-  const tilt = THREE.MathUtils.degToRad(((env && env.tilt) || b.tilt || [54, 64])[portrait ? 1 : 0]);
+  const tilt = THREE.MathUtils.degToRad((env.tilt || b.tilt || [54, 64])[portrait ? 1 : 0]);
   const dir = new THREE.Vector3(Math.sin(yaw) * Math.cos(tilt), Math.sin(tilt), Math.cos(yaw) * Math.cos(tilt));
   const target = new THREE.Vector3(0, b.h * 0.3, 0), v = new THREE.Vector3();
   const corners = [];
-  const pad = (env && env.pad) || 0, y0 = (env && env.floorY) || 0;
-  for (const x of [-b.w / 2 - pad, b.w / 2 + pad]) for (const z of [-b.d / 2 - pad, b.d / 2 + pad]) for (const y of [y0, b.h]) corners.push([x, y, z]);
-  if (env && env.extras) {
+  for (const x of [-b.w / 2, b.w / 2]) for (const z of [-b.d / 2, b.d / 2]) for (const y of [0, b.h]) corners.push([x, y, z]);
+  if (env.extras) {
     const lw = (yaw ? b.d : b.w) / 2, ld = (yaw ? b.w : b.d) / 2, zc = -(ld + env.gap), c = Math.cos(yaw), s = Math.sin(yaw);
-    for (const [x, y, z] of env.extras(lw, ld, zc)) corners.push([x * c + z * s, y, -x * s + z * c]);
+    for (const [x, y, z] of env.extras(lw, ld, zc, portrait)) corners.push([x * c + z * s, y, -x * s + z * c]);
     const ax = [0, 1, 2].map(i => [Math.min(...corners.map(p => p[i])), Math.max(...corners.map(p => p[i]))]);
     target.set((ax[0][0] + ax[0][1]) / 2, ax[1][0] + (ax[1][1] - ax[1][0]) * 0.3, (ax[2][0] + ax[2][1]) / 2);
   }
@@ -1313,71 +1180,97 @@ function fitCamera(b) {
   for (let it = 0; it < 30; it++) {
     const mid = (lo + hi) / 2;
     camera.position.copy(target).addScaledVector(dir, mid); camera.lookAt(target); camera.updateMatrixWorld();
-    const fits = corners.every(([x, y, z]) => { v.set(x, y, z).project(camera); return Math.abs(v.x) <= 0.92 && v.y >= -0.9 && v.y <= 0.74; });
+    const fits = corners.every(([x, y, z]) => { v.set(x, y, z).project(camera); return Math.abs(v.x) <= 0.92 && v.y >= -0.9 && v.y <= 0.9; });
     if (fits) hi = mid; else lo = mid;
   }
   camera.position.copy(target).addScaledVector(dir, hi); camera.lookAt(target); camera.updateMatrixWorld();
   lastFit = { b, yaw };
-  if (env) env.fit(b, yaw);
+  env.fit(b, yaw, portrait);
 }
 
-function attachEnv() {
-  if (env && rounds[current]) rounds[current].view.scene.add(env.group);
-}
-function selectEnv(id) {
-  envId = id;
-  if (env) { env.group.removeFromParent(); env.busy = false; }
-  for (const t of TOY_ORDER) if (rounds[t]) rounds[t].view.root.position.set(0, 0, 0);
-  env = envCache[id] || (envCache[id] = makeEnv(id));
-  paintMatcaps(LIGHTS[id]);
-  if (rounds[current]) showToy();
-  for (const b of document.querySelectorAll('.env')) b.setAttribute('aria-checked', String(b.dataset.env === id));
-  try { localStorage.setItem('toybox-env', id); } catch {}
-}
-
-function directionWords(m) {
-  const y = rounds.sand ? rounds.sand.view.surfaceY : 1.5;
-  const a = new THREE.Vector3(0, y, 0).project(camera), b = new THREE.Vector3(m.u[0], y, m.u[1]).project(camera);
-  const ang = Math.atan2(Math.abs(b.y - a.y) / Math.max(camera.aspect, 1e-3), Math.abs(b.x - a.x)) * 180 / Math.PI;
-  return ang > 62 ? 'top to bottom' : ang < 28 ? 'side to side' : 'diagonally';
-}
-
-function setChip(text, bad = false, hold = 0) {
-  const chip = $('chip');
-  chip.textContent = text; chip.classList.toggle('bad', bad);
-  clearTimeout(chipTimer);
-  if (hold) chipTimer = setTimeout(() => setChip(TOYS[current].hint(rounds[current].domain)), hold);
+/* finger cue: a touch dot traces the gesture on the toy itself, so no words are needed */
+const Cue = {
+  el: $('cue'), pts: null, t: 0, loops: 0, idle: 0,
+  show(loops = Infinity) { this.pts = cuePath(); this.t = 0; this.loops = loops; this.idle = 0; },
+  hide() { this.pts = null; this.idle = 0; this.clear(); },
+  clear() { const g = this.el.getContext('2d'); g.clearRect(0, 0, this.el.width, this.el.height); },
+  resize(w, h) { const dpr = Math.min(window.devicePixelRatio || 1, 2); this.el.width = w * dpr; this.el.height = h * dpr; if (this.pts) this.show(this.loops); },
+  update(dt, r) {
+    if (r.state !== 'playing') { if (this.pts) this.hide(); return; }
+    if (!this.pts) {
+      if (activePointer === null && (this.idle += dt) > 7) this.show(2);
+      return;
+    }
+    const W = this.el.width, H = this.el.height, v = new THREE.Vector3();
+    const sp = this.pts.map(p => { v.copy(p).project(camera); return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; });
+    const segs = []; let total = 0;
+    for (let i = 1; i < sp.length; i++) { const l = Math.hypot(sp[i][0] - sp[i - 1][0], sp[i][1] - sp[i - 1][1]); segs.push(l); total += l; }
+    const travel = Math.max(0.9, Math.min(2.2, total / (W * 0.45))), press = 0.3, cycle = press + travel + press + 0.6;
+    this.t += dt;
+    if (this.t >= cycle) { this.t -= cycle; if (--this.loops <= 0) { this.hide(); return; } }
+    const k = Math.min(1, Math.max(0, (this.t - press) / travel)), dist = easeInOut(k) * total;
+    let acc = 0, px = sp[0][0], py = sp[0][1];
+    const g = this.el.getContext('2d'), u = W / this.el.clientWidth || 1;
+    g.clearRect(0, 0, W, H);
+    g.lineCap = g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 9 * u;
+    g.beginPath(); g.moveTo(px, py);
+    for (let i = 0; i < segs.length; i++) {
+      if (acc + segs[i] >= dist) { const f = (dist - acc) / segs[i]; px = sp[i][0] + (sp[i + 1][0] - sp[i][0]) * f; py = sp[i][1] + (sp[i + 1][1] - sp[i][1]) * f; g.lineTo(px, py); break; }
+      acc += segs[i]; px = sp[i + 1][0]; py = sp[i + 1][1]; g.lineTo(px, py);
+    }
+    const fadeOut = Math.max(0, (this.t - press - travel) / press);
+    g.globalAlpha = 1 - Math.min(1, fadeOut); g.stroke();
+    const pressK = this.t < press ? this.t / press : 1;
+    g.shadowColor = 'rgba(20,24,40,0.35)'; g.shadowBlur = 10 * u; g.shadowOffsetY = 3 * u;
+    g.fillStyle = 'rgba(255,255,255,0.95)'; g.beginPath(); g.arc(px, py, (22 - 6 * pressK) * u, 0, Math.PI * 2); g.fill();
+    g.shadowColor = 'transparent';
+    if (!reduceMotion.matches && this.t < press * 2) { g.strokeStyle = `rgba(255,255,255,${0.8 * (1 - this.t / (press * 2))})`; g.lineWidth = 3 * u; g.beginPath(); g.arc(px, py, (22 + 30 * this.t / (press * 2)) * u, 0, Math.PI * 2); g.stroke(); }
+    g.globalAlpha = 1;
+  },
+};
+function cuePath() {
+  const r = rounds[current], m = r.domain, V = (x, y, z) => new THREE.Vector3(x, y, z);
+  if (current === 'pop') {
+    const y = r.view.top + 0.3, next = m.bubbles.find((b, i) => !m.popped[i]) || m.bubbles[0];
+    return [V(-m.board.w * 0.38, y, next.z), V(m.board.w * 0.38, y, next.z)];
+  }
+  if (current === 'sand') {
+    const y = r.view.surfaceY + 0.02;
+    const p = m.pieces.reduce((a, b) => Math.abs(polyArea(b.poly)) > Math.abs(polyArea(a.poly)) ? b : a);
+    const c = centroid(p.poly), ts = p.poly.map(q => (q[0] - c[0]) * m.u[0] + (q[1] - c[1]) * m.u[1]);
+    const a = Math.min(...ts) - 0.5, b = Math.max(...ts) + 0.5;
+    return [V(c[0] + p.shift[0] + m.u[0] * a, y, c[1] + p.shift[1] + m.u[1] * a), V(c[0] + p.shift[0] + m.u[0] * b, y, c[1] + p.shift[1] + m.u[1] * b)];
+  }
+  const xs = m.poly.map(q => q[0]), zs = m.poly.map(q => q[1]), y = r.view.objTop + 0.25;
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+  return [0.15, 0.38, 0.62, 0.85].map((f, i) => V(i % 2 ? x1 : x0, y, z0 + (z1 - z0) * f));
 }
 
 function updateHUD() {
-  const r = rounds[current], def = TOYS[current];
-  const [text, frac] = def.progress(r.domain);
-  $('progress-text').textContent = text;
-  $('config-text').textContent = def.configs[r.cfgIndex].label;
+  const r = rounds[current], frac = TOYS[current].progress(r.domain);
   $('bar-fill').style.width = `${Math.min(100, frac * 100).toFixed(1)}%`;
   $('bar').setAttribute('aria-valuenow', Math.round(frac * 100));
-  if (env && env.onProgress) env.onProgress(frac);
+  const dots = $('dots');
+  if (dots.children.length !== TOYS[current].configs.length) dots.innerHTML = '<i></i>'.repeat(TOYS[current].configs.length);
+  [...dots.children].forEach((d, k) => { d.classList.toggle('on', k === r.cfgIndex); d.classList.toggle('done', finished.has(`${current}:${k}`)); });
 }
 
 function showToy() {
   const r = rounds[current];
-  attachEnv();
+  r.view.scene.add(env.group);
   fitCamera(r.view.bounds);
-  if (env && env.onShow) env.onShow(r);
   for (const t of document.querySelectorAll('.tab')) t.setAttribute('aria-selected', String(t.dataset.toy === current));
   stage.setAttribute('aria-labelledby', `tab-${current}`);
-  setChip(TOYS[current].hint(r.domain));
   updateHUD();
   showResult(r.state === 'result');
+  if (r.state === 'playing') Cue.show(); else Cue.hide();
 }
+function switchToy(id) { if (id === current) return; cancelGesture(); current = id; showToy(); }
 
 function showResult(on) {
-  const r = rounds[current];
   $('result').hidden = !on;
-  if (!on) return;
-  const [title, sub] = TOYS[current].result(r.domain);
-  $('result-title').textContent = title; $('result-sub').textContent = sub;
-  $('next-result').focus({ preventScroll: true });
+  if (on) $('next-result').focus({ preventScroll: true });
 }
 
 function handle(events) {
@@ -1386,13 +1279,13 @@ function handle(events) {
     r.view.onEvent(e);
     if (e.type === 'bubble-popped') Sound.pop(e.r);
     else if (e.type === 'cut-committed') Sound.slice(e.chord);
-    else if (e.type === 'cut-rejected') { Sound.reject(); setChip(REJECT[e.reason] || `Cut ${directionWords(r.domain)}`, true, 1800); }
+    else if (e.type === 'cut-rejected') { Sound.reject(); Cue.show(2); }
     else if (e.type === 'foam-cleared') brushEnergy += e.amount;
   }
   if (events.length) updateHUD();
   if (r.state === 'playing' && TOYS[current].domain.isComplete(r.domain)) {
     r.state = 'completing'; r.t = 0;
-    if (env && env.onComplete) env.onComplete(current, r.cfgIndex);
+    finished.add(`${current}:${r.cfgIndex}`);
     cancelGesture();
     Sound.chime();
   }
@@ -1400,10 +1293,13 @@ function handle(events) {
 
 /* input: one manipulating pointer, mapped through the camera onto the toy's top plane */
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hitP = new THREE.Vector3();
-function toModel(e) {
+function aim(e) {
   const rect = canvas.getBoundingClientRect();
   ndc.set((e.clientX - rect.left) / rect.width * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
   ray.setFromCamera(ndc, camera);
+}
+function toModel(e) {
+  aim(e);
   plane.constant = -rounds[current].view.surfaceY;
   return ray.ray.intersectPlane(plane, hitP) ? { x: hitP.x, z: hitP.z } : null;
 }
@@ -1417,8 +1313,13 @@ function cancelGesture() {
 }
 canvas.addEventListener('pointerdown', (e) => {
   Sound.unlock();
-  if (activePointer !== null || rounds[current].state !== 'playing' || (env && env.busy)) return;
+  if (activePointer !== null) return;
+  aim(e);
+  const other = env.pick(ray);
+  if (other && other !== current) { pendingTap = { toy: other, id: e.pointerId, x: e.clientX, y: e.clientY }; return; }
+  if (rounds[current].state !== 'playing') return;
   const p = toModel(e); if (!p) return;
+  Cue.hide();
   activePointer = e.pointerId;
   canvas.setPointerCapture(e.pointerId);
   dispatch({ type: 'down', pointerId: e.pointerId, ...p });
@@ -1429,6 +1330,11 @@ canvas.addEventListener('pointermove', (e) => {
   for (const ce of (list.length ? list : [e])) { const p = toModel(ce); if (p && activePointer !== null) dispatch({ type: 'move', pointerId: e.pointerId, ...p }); }
 });
 canvas.addEventListener('pointerup', (e) => {
+  if (pendingTap && pendingTap.id === e.pointerId) {
+    const t = pendingTap; pendingTap = null;
+    if (Math.hypot(e.clientX - t.x, e.clientY - t.y) < 12) switchToy(t.toy);
+    return;
+  }
   if (e.pointerId !== activePointer) return;
   const p = toModel(e) || {};
   activePointer = null;
@@ -1441,10 +1347,11 @@ canvas.addEventListener('lostpointercapture', (e) => { if (e.pointerId === activ
 document.addEventListener('visibilitychange', () => { if (document.hidden) { cancelGesture(); Sound.silence(); } }); // preview-only; YouTube builds use host pause callbacks
 
 /* controls */
-for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => { if (t.dataset.toy === current) return; cancelGesture(); current = t.dataset.toy; showToy(); });
-$('reset').addEventListener('click', () => { cancelGesture(); newRound(current, rounds[current].cfgIndex); });
-$('replay').addEventListener('click', () => { cancelGesture(); newRound(current, rounds[current].cfgIndex); });
+for (const t of document.querySelectorAll('.tab')) t.addEventListener('click', () => switchToy(t.dataset.toy));
+const replay = () => { cancelGesture(); newRound(current, rounds[current].cfgIndex); };
 const nextLayout = () => { cancelGesture(); const r = rounds[current]; newRound(current, (r.cfgIndex + 1) % TOYS[current].configs.length); };
+$('reset').addEventListener('click', replay);
+$('replay').addEventListener('click', replay);
 $('next').addEventListener('click', nextLayout);
 $('next-result').addEventListener('click', nextLayout);
 $('mute').addEventListener('click', () => {
@@ -1460,14 +1367,13 @@ new ResizeObserver(() => {
   cancelGesture();
   renderer.setSize(w, h, false);
   camera.aspect = w / h; camera.updateProjectionMatrix();
-  if (rounds[current]) { fitCamera(rounds[current].view.bounds); setChip(TOYS[current].hint(rounds[current].domain)); }
+  if (rounds[current]) fitCamera(rounds[current].view.bounds);
+  Cue.resize(w, h);
 }).observe(stage);
 
 /* boot */
-for (const b of document.querySelectorAll('.env')) b.addEventListener('click', () => selectEnv(b.dataset.env));
-let savedEnv = 'toybox';
-try { savedEnv = localStorage.getItem('toybox-env') || 'toybox'; } catch {}
-selectEnv(ENVS[savedEnv] ? savedEnv : 'toybox');
+const debug = location.hash === '#stats';
+$('stats').hidden = !debug;
 const feasible = sandFeasibility();
 newRound('sand', 0); newRound('foam', 0);
 newRound('pop', 0);
@@ -1480,12 +1386,14 @@ function frame(now) {
   const r = rounds[current];
   if (!stage.clientWidth || !stage.clientHeight) return;
   r.view.update(dt, now / 1000, r);
-  if (env) env.update(dt, now / 1000);
-  if (r.state === 'completing') { r.t += dt; if (r.t >= r.view.payoffDuration()) { r.state = 'result'; showResult(true); } }
+  env.update(dt, now / 1000);
+  if (r.state === 'completing') { r.t += dt; if (r.t >= r.view.payoffDuration()) { r.state = 'result'; showResult(true); updateHUD(); } }
   else if (r.state === 'result') r.t += dt;
   if (current === 'foam') { if (activePointer !== null) Sound.brushTick(brushEnergy, dt); brushEnergy = 0; }
   renderer.render(r.view.scene, camera);
+  Cue.update(dt, r);
   if (!firstFrame) { firstFrame = performance.now(); $('loading').hidden = true; }
+  if (!debug) return;
   fpsN++; fpsT += dt;
   if (fpsT >= 0.5) {
     fps = Math.round(fpsN / fpsT); fpsN = 0; fpsT = 0;
