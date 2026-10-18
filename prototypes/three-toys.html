@@ -129,7 +129,7 @@ button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   <div class="envs" role="radiogroup" aria-label="Environment">
     <button class="env" role="radio" data-env="studio" aria-checked="true"><i style="background: linear-gradient(135deg, #F6DCCD, #D9D3F1)"></i>Studio</button>
     <button class="env" role="radio" data-env="desk" aria-checked="false"><i style="background: linear-gradient(135deg, #C88F5A 50%, #78B4EA 50%)"></i>Desk</button>
-    <button class="env" role="radio" data-env="night" aria-checked="false"><i style="background: radial-gradient(circle at 35% 35%, #FFB85C 0 25%, #151222 60%)"></i>Night</button>
+    <button class="env" role="radio" data-env="bath" aria-checked="false"><i style="background: linear-gradient(135deg, #FFD23F 0 35%, #BCE7DC 35%)"></i>Bath</button>
   </div>
   <div class="row">
     <button class="btn" id="reset">Reset</button>
@@ -468,8 +468,8 @@ const FoamDomain = {
 // Matcaps carry the lighting. Each environment repaints them, so every toy picks up that room's light.
 const LIGHTS = {
   studio: { key: '#FFFFFF', fill: '#8F8BA8', spec: '#FFFFFF', rim: ['#FFC2DA', 0.22] },
-  desk: { key: '#FFF3DE', fill: '#7383AE', spec: '#FFFBEE', rim: ['#FFE1A3', 0.2] },
-  night: { key: '#FFCB8E', fill: '#241E36', spec: '#FFE6C0', rim: ['#5C8BFF', 0.6] },
+  desk: { key: '#FFF6E6', fill: '#8D9BC4', spec: '#FFFCF2', rim: ['#FFE1A3', 0.2] },
+  bath: { key: '#FFFFFF', fill: '#93A9C2', spec: '#FFFFFF', rim: ['#B8F2E4', 0.28] },
 };
 const MATCAP_SPECS = {
   plastic: { shade: 1, rim: 0.28, spec: 0.9, size: 0.17 },
@@ -827,7 +827,8 @@ class FoamView extends BaseView {
 const ROOM_VS = `varying vec3 vW;
 void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
 const ROOM_FS = `uniform vec3 uFloor, uWall, uTop, uPool, uSun;
-uniform float uBlend, uRise, uPoolR, uPoolK, uWoodK, uSunK, uVig, uZc;
+uniform float uBlend, uRise, uPoolR, uPoolK, uWoodK, uSunK, uVig, uZc, uTileK, uMarbleK;
+uniform vec3 uGrout;
 uniform vec2 uRot, uSunC;
 uniform sampler2D uWood;
 varying vec3 vW;
@@ -836,8 +837,22 @@ void main() {
   vec3 L = vec3(vW.x * uRot.x - vW.z * uRot.y, vW.y, vW.x * uRot.y + vW.z * uRot.x);
   float onFloor = 1.0 - smoothstep(0.0, uBlend, L.y);
   vec3 wall = mix(uWall, uTop, smoothstep(0.0, 1.0, clamp(L.y / uRise, 0.0, 1.0)));
+  if (uTileK > 0.0) {
+    vec2 t = vec2(L.x / 0.9, (L.y - 0.03) / 0.45);
+    t.x += 0.5 * mod(floor(t.y), 2.0);
+    vec2 f = fract(t) - 0.5;
+    float d = min((0.5 - abs(f.x)) * 0.9, (0.5 - abs(f.y)) * 0.45);
+    wall *= 1.0 + 0.07 * f.y - 0.05 * smoothstep(0.02, 0.1, d) * (1.0 - smoothstep(0.1, 0.2, d));
+    wall = mix(wall, uGrout, (1.0 - smoothstep(0.012, 0.03, d)) * uTileK);
+  }
   vec3 floorC = uFloor;
   if (uWoodK > 0.0) floorC *= mix(1.0, 0.5 + texture2D(uWood, L.xz * vec2(0.035, 0.12)).r, uWoodK);
+  if (uMarbleK > 0.0) {
+    float v1 = sin(L.x * 0.7 + sin(L.z * 1.1 + L.x * 0.3) * 2.2 + sin(L.z * 0.37) * 3.0);
+    float v2 = sin(L.x * 1.9 - L.z * 1.3 + sin(L.x * 0.8) * 1.5);
+    float vein = max(1.0 - smoothstep(0.0, 0.07, abs(v1)), 0.5 * (1.0 - smoothstep(0.0, 0.04, abs(v2))));
+    floorC = mix(floorC, floorC * vec3(0.76, 0.79, 0.84), vein * uMarbleK * 0.55);
+  }
   vec3 c = mix(wall, floorC, onFloor);
   c += uPool * uPoolK * exp(-dot(vW.xz, vW.xz) / (uPoolR * uPoolR)) * mix(0.3, 1.0, onFloor);
   if (uSunK > 0.0) {
@@ -853,28 +868,15 @@ void main() {
   gl_FragColor.rgb += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
 }`;
 const GLASS_VS = `varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
-const GLASS_FS = `uniform vec3 uTop, uBot, uGlow; uniform float uNight, uTime; varying vec2 vUv;
+const GLASS_FS = `uniform vec3 uTop, uBot, uGlow; uniform float uClouds, uTime; varying vec2 vUv;
 float h1(float n) { return fract(sin(n) * 43758.5453); }
 void main() {
   vec3 c = mix(uBot, uTop, vUv.y);
-  if (uNight < 0.5) {
-    c += uGlow * exp(-dot(vUv - vec2(0.18, 0.86), vUv - vec2(0.18, 0.86)) * 8.0);
-    for (int i = 0; i < 3; i++) {
-      float fi = float(i);
-      vec2 p = vec2(0.28 + fi * 0.3 + 0.04 * sin(uTime * 0.07 + fi), 0.5 + 0.18 * h1(fi + 3.0));
-      c = mix(c, vec3(1.0), 0.6 * smoothstep(0.17, 0.0, length((vUv - p) * vec2(1.0, 2.8))));
-    }
-  } else {
-    for (int i = 0; i < 16; i++) {
-      float fi = float(i);
-      vec2 p = vec2(h1(fi * 12.7), 0.05 + 0.4 * h1(fi * 7.3));
-      float r = 0.025 + 0.045 * h1(fi * 3.1);
-      vec3 lc = mix(vec3(1.0, 0.72, 0.38), vec3(0.55, 0.72, 1.0), step(0.6, h1(fi * 5.9)));
-      c += lc * 0.3 * smoothstep(r, r * 0.4, length((vUv - p) * vec2(1.35, 1.0)));
-    }
-    vec2 g = vUv * vec2(46.0, 2.2);
-    float col = floor(g.x), y = fract(g.y + uTime * (0.7 + h1(col * 1.7) * 0.9) + h1(col * 9.1));
-    c += vec3(0.55, 0.65, 0.85) * 0.22 * (1.0 - smoothstep(0.03, 0.09, abs(fract(g.x) - 0.5))) * smoothstep(0.75, 1.0, y);
+  c += uGlow * exp(-dot(vUv - vec2(0.18, 0.86), vUv - vec2(0.18, 0.86)) * 8.0);
+  for (int i = 0; i < 3; i++) {
+    float fi = float(i);
+    vec2 p = vec2(0.28 + fi * 0.3 + 0.04 * sin(uTime * 0.07 + fi), 0.5 + 0.18 * h1(fi + 3.0));
+    c = mix(c, vec3(1.0), uClouds * smoothstep(0.17, 0.0, length((vUv - p) * vec2(1.0, 2.8))));
   }
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
@@ -895,13 +897,6 @@ function woodTexture() {
     g.fillRect(Math.floor(rnd() * W), p * ph, 1.5, ph);
   }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 4; return t;
-}
-function glowTexture() {
-  const s = 64, c = document.createElement('canvas'); c.width = c.height = s;
-  const g = c.getContext('2d'), gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.25, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, s, s);
-  return new THREE.CanvasTexture(c);
 }
 // One mesh holds floor and back wall: the floor bends up into the wall with corner radius Rc.
 function coveGeometry(Rc) {
@@ -925,19 +920,19 @@ function makeRoom(o) {
       uBlend: { value: o.blend }, uRise: { value: o.rise }, uPoolR: { value: o.poolR || 6 }, uPoolK: { value: o.poolK || 0 },
       uWoodK: { value: o.wood ? 1 : 0 }, uWood: { value: o.wood || null }, uSunK: { value: o.sunK || 0 }, uSunC: { value: new THREE.Vector2() },
       uVig: { value: o.vig || 0 }, uZc: { value: 0 }, uRot: { value: new THREE.Vector2(1, 0) },
+      uTileK: { value: o.tile ? 1 : 0 }, uGrout: { value: C(o.grout || '#ffffff') }, uMarbleK: { value: o.marble ? 1 : 0 },
     },
   }));
 }
 const mm = (color, matcap = MATCAP.plastic, extra = {}) => new THREE.MeshMatcapMaterial({ matcap, color, ...extra });
 const placed = (mesh, x, y, z) => { mesh.position.set(x, y, z); return mesh; };
-function windowGroup(night, frameColor) {
+const skyMat = (top, bot, glow, clouds) => new THREE.ShaderMaterial({
+  vertexShader: GLASS_VS, fragmentShader: GLASS_FS,
+  uniforms: { uTop: { value: C(top) }, uBot: { value: C(bot) }, uGlow: { value: C(glow) }, uClouds: { value: clouds }, uTime: { value: 0 } },
+});
+function windowGroup(frameColor) {
   const grp = new THREE.Group(), W = 4.6, H = 3.0;
-  const glass = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.ShaderMaterial({
-    vertexShader: GLASS_VS, fragmentShader: GLASS_FS,
-    uniforms: night
-      ? { uTop: { value: C('#070E26') }, uBot: { value: C('#1A2A58') }, uGlow: { value: C('#000000') }, uNight: { value: 1 }, uTime: { value: 0 } }
-      : { uTop: { value: C('#78B4EA') }, uBot: { value: C('#D6EDFA') }, uGlow: { value: C('#FFF0C8') }, uNight: { value: 0 }, uTime: { value: 0 } },
-  }));
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(W, H), skyMat('#78B4EA', '#D6EDFA', '#FFF0C8', 0.6));
   grp.add(glass);
   const fm = mm(frameColor), t = 0.16;
   for (const [w, h, x, y] of [[W + t * 2, t, 0, H / 2 + t / 2], [W + t * 2, t * 1.6, 0, -H / 2 - t * 0.8], [t, H, -W / 2 - t / 2, 0], [t, H, W / 2 + t / 2, 0], [t * 0.6, H, 0, 0], [W, t * 0.6, 0, 0.25]]) {
@@ -948,8 +943,8 @@ function windowGroup(night, frameColor) {
 }
 
 function buildStudio(e) {
-  e.bg = '#D9D3F1'; e.gap = 1.0;
-  e.room = makeRoom({ Rc: 5, blend: 3.5, rise: 14, floor: '#F6DCCD', wall: '#F2D2DF', top: '#D9D3F1', pool: '#FFFFFF', poolR: 7, poolK: 0.12, vig: 0.22 });
+  e.bg = '#E1DCF6'; e.gap = 1.0;
+  e.room = makeRoom({ Rc: 5, blend: 3.5, rise: 14, floor: '#FAE3D6', wall: '#F6DAE5', top: '#E1DCF6', pool: '#FFFFFF', poolR: 7, poolK: 0.12, vig: 0.1 });
   const defs = [
     [new THREE.TorusGeometry(0.55, 0.22, 20, 48), '#FF8FB1', (w, d) => [-w * 0.72, 1.5, -d - 1.3]],
     [new THREE.SphereGeometry(0.6, 32, 20), '#FFD166', (w, d) => [w * 0.78, 1.2, -d - 1.1]],
@@ -979,9 +974,9 @@ function buildStudio(e) {
 }
 
 function buildDesk(e) {
-  e.bg = '#E6DACA'; e.gap = 1.6;
-  e.room = makeRoom({ Rc: 0.12, blend: 0.04, rise: 9, floor: '#C88F5A', wall: '#EFE5D7', top: '#E3D6C4', wood: woodTexture(), sun: '#FFE09C', sunK: 0.3, pool: '#FFF1D6', poolR: 8, poolK: 0.05, vig: 0.28 });
-  e.win = windowGroup(false, '#FBF8F2');
+  e.bg = '#F2E9DC'; e.gap = 1.6;
+  e.room = makeRoom({ Rc: 0.12, blend: 0.04, rise: 9, floor: '#DDAA74', wall: '#F7F0E6', top: '#F2E9DC', wood: woodTexture(), sun: '#FFE09C', sunK: 0.36, pool: '#FFF6E4', poolR: 8, poolK: 0.08, vig: 0.14 });
+  e.win = windowGroup('#FFFFFF');
   const cup = new THREE.Group();
   cup.add(placed(new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.44, 1.15, 28), mm('#5BA8E8')), 0, 0.575, 0));
   ['#FFCB47', '#FF6B6B', '#5BC88D', '#9C8CFF', '#FF9F5A'].forEach((col, i) => {
@@ -1018,51 +1013,43 @@ function buildDesk(e) {
   e.update = (dt, t) => { e.win.userData.glass.material.uniforms.uTime.value = t; };
 }
 
-function buildNight(e) {
-  e.bg = '#151222'; e.gap = 1.6;
-  e.room = makeRoom({ Rc: 0.12, blend: 0.04, rise: 9, floor: '#4C3124', wall: '#221C33', top: '#151222', wood: woodTexture(), pool: '#FFA24E', poolR: 6.5, poolK: 0.5, vig: 0.65 });
-  e.win = windowGroup(true, '#2C2640');
-  const glow = glowTexture();
-  const lamp = new THREE.Group(), brass = mm('#D9A94E', MATCAP.metal), dark = mm('#2E2A3C');
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.75, 0.16, 32), dark); base.position.y = 0.08;
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 3.1, 12), brass); stem.position.y = 1.6;
-  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.6, 12), brass); arm.rotation.z = Math.PI / 2; arm.position.set(0.8, 3.12, 0);
-  const shade = new THREE.Mesh(new THREE.ConeGeometry(0.62, 0.8, 32, 1, true), mm('#2E2A3C', MATCAP.plastic, { side: THREE.DoubleSide }));
-  shade.position.set(1.6, 2.8, 0); shade.rotation.z = -0.35;
-  const bulb = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([1.66, 2.45, 0], 3)),
-    new THREE.PointsMaterial({ size: 3.4, map: glow, color: '#FFC27A', transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  lamp.add(base, stem, arm, shade, bulb);
-  const N = 30, pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
-  const lights = new THREE.Points(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pos, 3)).setAttribute('color', new THREE.BufferAttribute(col, 3)),
-    new THREE.PointsMaterial({ size: 1.1, map: glow, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-  const bulbs = new THREE.InstancedMesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshBasicMaterial({ color: '#FFE2B0' }), N);
-  const wire = new THREE.Line(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(pos, 3)), new THREE.LineBasicMaterial({ color: '#0E0C16' }));
-  const warm = [C('#FFB85C'), C('#FFD08A'), C('#FF9F6B')];
-  e.group.add(e.win, lamp, lights, bulbs, wire);
+function buildBath(e) {
+  e.bg = '#D6F1EA'; e.gap = 1.5;
+  e.room = makeRoom({ Rc: 0.12, blend: 0.04, rise: 9, floor: '#F8F8F6', wall: '#BCE7DC', top: '#D6F1EA', tile: true, grout: '#F3FBF8', marble: true, pool: '#FFFFFF', poolR: 8, poolK: 0.06, vig: 0.1 });
+  const gold = mm('#E8C062', MATCAP.metal), white = mm('#FFFFFF');
+  const mirror = new THREE.Group();
+  mirror.add(new THREE.Mesh(new THREE.CircleGeometry(1.5, 64), skyMat('#BFE3F2', '#F4FBFD', '#FFFFFF', 0.35)), placed(new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.09, 12, 64), gold), 0, 0, 0.02));
+  const duck = new THREE.Group(), yellow = mm('#FFD23F'), sphere = new THREE.SphereGeometry(1, 28, 18);
+  const body = placed(new THREE.Mesh(sphere, yellow), 0, 0.5, 0); body.scale.set(0.78, 0.52, 0.6);
+  const tail = placed(new THREE.Mesh(sphere, yellow), -0.62, 0.72, 0); tail.scale.set(0.22, 0.3, 0.22); tail.rotation.z = 0.6;
+  const head = placed(new THREE.Mesh(sphere, yellow), 0.42, 1.08, 0); head.scale.setScalar(0.38);
+  const beak = placed(new THREE.Mesh(sphere, mm('#FF8A3D')), 0.8, 1.0, 0); beak.scale.set(0.24, 0.08, 0.17);
+  const eyeMat = mm('#1C2133'), eyeGeo = new THREE.SphereGeometry(0.05, 10, 8);
+  duck.add(body, tail, head, beak, placed(new THREE.Mesh(eyeGeo, eyeMat), 0.67, 1.17, 0.18), placed(new THREE.Mesh(eyeGeo, eyeMat), 0.67, 1.17, -0.18));
+  duck.rotation.y = -0.9;
+  const pump = new THREE.Group();
+  pump.add(
+    placed(new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.3, 28), mm('#FF9EB5')), 0, 0.65, 0),
+    placed(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.22, 0.2, 20), white), 0, 1.4, 0),
+    placed(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 12), white), 0, 1.65, 0),
+    placed(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.09, 0.12), white), 0.17, 1.86, 0));
+  const towels = new THREE.Group(), roll = new THREE.CylinderGeometry(0.34, 0.34, 1.5, 28).rotateZ(Math.PI / 2);
+  [['#7ED9C9', 0, 0.34, -0.36], ['#FFFFFF', 0, 0.34, 0.36], ['#FFB4A2', 0, 0.94, 0]].forEach(([col, x, y, z]) => towels.add(placed(new THREE.Mesh(roll, mm(col, MATCAP.matte)), x, y, z)));
+  const soap = new THREE.Group();
+  soap.add(placed(new THREE.Mesh(new THREE.CylinderGeometry(0.62, 0.5, 0.1, 32), white), 0, 0.05, 0));
+  const bar = placed(new THREE.Mesh(sphere, mm('#C9B8FF')), 0, 0.22, 0); bar.scale.set(0.42, 0.14, 0.28); soap.add(bar);
+  e.group.add(mirror, duck, pump, towels, soap);
   e.place = (w, d, zc) => {
-    e.win.position.set(w * 0.2, 2.3, zc - 0.12 + 0.03);
-    lamp.position.set(-w - 1.3, 0, -d - 0.5);
-    const m = new THREE.Matrix4();
-    for (let i = 0; i < N; i++) {
-      const f = i / (N - 1), x = -w - 2.5 + (2 * w + 5) * f, swag = (f * 3) % 1, y = 1.55 - Math.sin(swag * Math.PI) * 0.55, z = zc - 0.12 + 0.12;
-      pos.set([x, y, z], i * 3);
-      bulbs.setMatrixAt(i, m.makeTranslation(x, y, z));
-    }
-    lights.geometry.attributes.position.needsUpdate = true; wire.geometry.attributes.position.needsUpdate = true;
-    bulbs.instanceMatrix.needsUpdate = true;
+    mirror.position.set(-w * 0.15, 2.4, zc - 0.12 + 0.04);
+    duck.position.set(w + 1.1, 0, -d + 0.5);
+    pump.position.set(-w - 1.1, 0, -d - 0.1);
+    towels.position.set(-w * 0.55, 0, -d - 0.8);
+    soap.position.set(w * 0.45, 0, -d - 0.75);
   };
-  e.update = (dt, t) => {
-    e.win.userData.glass.material.uniforms.uTime.value = t;
-    for (let i = 0; i < N; i++) {
-      const k = reduceMotion.matches ? 0.85 : 0.55 + 0.45 * Math.sin(t * 1.6 + i * 1.37) ** 2;
-      const c = warm[i % 3];
-      col.set([c.r * k, c.g * k, c.b * k], i * 3);
-    }
-    lights.geometry.attributes.color.needsUpdate = true;
-  };
+  e.update = (dt, t) => { if (!reduceMotion.matches) duck.rotation.z = Math.sin(t * 1.3) * 0.035; };
 }
 
-const ENVS = { studio: buildStudio, desk: buildDesk, night: buildNight };
+const ENVS = { studio: buildStudio, desk: buildDesk, bath: buildBath };
 function makeEnv(id) {
   const e = { group: new THREE.Group(), place() {}, update() {} };
   ENVS[id](e);
